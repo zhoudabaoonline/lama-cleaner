@@ -106,6 +106,7 @@ class RealESRGANModelName(str, Enum):
 RealESRGANModelNameList = [e.value for e in RealESRGANModelName]
 
 INTERACTIVE_SEG_HELP = "Enable interactive segmentation using Segment Anything."
+INTERACTIVE_SEG_MODEL_HELP = "Model size: vit_b < vit_l < vit_h. Bigger model size means better segmentation but slower speed."
 AVAILABLE_INTERACTIVE_SEG_MODELS = ["vit_b", "vit_l", "vit_h"]
 AVAILABLE_INTERACTIVE_SEG_DEVICES = ["cuda", "cpu", "mps"]
 REMOVE_BG_HELP = "Enable remove background. Always run on CPU"
@@ -141,7 +142,7 @@ class Config(BaseModel):
     # plugins
     enable_interactive_seg: bool = False
     interactive_seg_model: str = "vit_l"
-    interactive_seg_device: str = "cuda"
+    interactive_seg_device: str = "cpu"
     enable_remove_bg: bool = False
     enable_realesrgan: bool = False
     realesrgan_device: str = "cpu"
