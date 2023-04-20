@@ -1,0 +1,43 @@
+.textRectContainer {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    z-index: 100;
+
+    .textRect {
+        position: absolute;
+        color: red;
+        display: flex;
+        flex-direction: row;
+
+
+        .textRegonition {
+            z-index: 21;
+            border: 1px solid red;
+
+            .closeArea {
+                position: absolute;
+                width: 20px;
+                height: 20px;
+                overflow: hidden;
+                color: green;
+                border: 1px solid #7979798f;
+                font-size: 16px;
+                line-height: 20px;
+                text-align: center;
+                background-color: rgba($color: #7979798f, $alpha: 0.5);
+            }
+
+        }
+
+        .editArea {
+            border: 1px solid red;
+        }
+
+
+    }
+
+
+
+
+}

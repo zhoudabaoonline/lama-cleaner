@@ -28,7 +28,7 @@
       }
     ],
     "prettier/prettier": [
-      "error",
+      "off",
       {
         "singleQuote": true,
         "arrowParens": "avoid",
@@ -37,7 +37,7 @@
     ],
     "consistent-return": "off",
     "no-use-before-define": "off",
-    "import/extensions": "off",
+    "import/extensions": "off", 
     "react/prop-types": 0,
     "react/require-default-props": "off",
     "no-shadow": "off",

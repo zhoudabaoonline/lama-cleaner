@@ -3,58 +3,59 @@ import React, { ReactNode } from 'react'
 import { useRecoilState } from 'recoil'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import Button from './Button'
-import { appState } from '../../store/Atoms'
+import { appState } from '../../store/atoms/Atoms'
 
 export interface ModalProps {
-  show: boolean
-  children?: ReactNode
-  onClose?: () => void
-  title: string | ReactNode
-  showCloseIcon?: boolean
-  className?: string
+    show: boolean
+    children?: ReactNode
+    onClose?: () => void
+    title: string | ReactNode
+    showCloseIcon?: boolean
+    className?: string
 }
 
+// 模态对话框通用组件
 const Modal = React.forwardRef<
-  React.ElementRef<typeof DialogPrimitive.Root>,
-  ModalProps
+    React.ElementRef<typeof DialogPrimitive.Root>,
+    ModalProps
 >((props, forwardedRef) => {
-  const { show, children, onClose, className, title, showCloseIcon } = props
-  const [_, setAppState] = useRecoilState(appState)
+    const { show, children, onClose, className, title, showCloseIcon } = props
+    const [_, setAppState] = useRecoilState(appState)
 
-  const onOpenChange = (open: boolean) => {
-    if (!open) {
-      onClose?.()
-      setAppState(old => {
-        return { ...old, disableShortCuts: false }
-      })
+    const onOpenChange = (open: boolean) => {
+        if (!open) {
+            onClose?.()
+            setAppState(old => {
+                return { ...old, disableShortCuts: false }
+            })
+        }
     }
-  }
 
-  return (
-    <DialogPrimitive.Root open={show} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="modal-mask" />
-        <DialogPrimitive.Content
-          ref={forwardedRef}
-          className={`modal ${className}`}
-        >
-          <div className="modal-header">
-            <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
-            {showCloseIcon ? (
-              <Button icon={<XMarkIcon />} onClick={onClose} />
-            ) : (
-              <></>
-            )}
-          </div>
-          {children}
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
-  )
+    return (
+        <DialogPrimitive.Root open={show} onOpenChange={onOpenChange}>
+            <DialogPrimitive.Portal>
+                <DialogPrimitive.Overlay className="modal-mask" />
+                <DialogPrimitive.Content
+                    ref={forwardedRef}
+                    className={`modal ${className}`}
+                >
+                    <div className="modal-header">
+                        <DialogPrimitive.Title>{title}</DialogPrimitive.Title>
+                        {showCloseIcon ? (
+                            <Button icon={<XMarkIcon />} onClick={onClose} />
+                        ) : (
+                            <></>
+                        )}
+                    </div>
+                    {children}
+                </DialogPrimitive.Content>
+            </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+    )
 })
 
 Modal.defaultProps = {
-  showCloseIcon: true,
+    showCloseIcon: true,
 }
 
 export default Modal

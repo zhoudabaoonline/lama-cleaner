@@ -49,10 +49,10 @@ https://user-images.githubusercontent.com/3998421/196976498-ba1ad3ab-fa18-4c55-9
   - Erase model: LaMa/LDM/ZITS/MAT/FcF/Manga
   - Erase and Replace model: Stable Diffusion/Paint by Example
 - [Plugins](https://lama-cleaner-docs.vercel.app/plugins) for post-processing:
-  - [RemoveBG](https://github.com/danielgatis/rembg): Remove images background 
-  - [RealESRGAN](https://github.com/xinntao/Real-ESRGAN): Super Resolution
-  - [GFPGAN](https://github.com/TencentARC/GFPGAN): Face Restoration
-  - [RestoreFormer](https://github.com/wzhouxiff/RestoreFormer): Face Restoration
+  - [RemoveBG](https://github.com/danielgatis/rembg): Remove images background 背景移除
+  - [RealESRGAN](https://github.com/xinntao/Real-ESRGAN): Super Resolution,模糊变高清,视频也可以哦
+  - [GFPGAN](https://github.com/TencentARC/GFPGAN): Face Restoration,老图片上色
+  - [RestoreFormer](https://github.com/wzhouxiff/RestoreFormer): Face Restoration 模糊变高清
   - [Segment Anything](https://lama-cleaner-docs.vercel.app/plugins#interactive-segmentation): Accurate and fast interactive object segmentation
 - More features at [lama-cleaner-docs](https://lama-cleaner-docs.vercel.app/)
 
@@ -65,6 +65,10 @@ Lama Cleaner make it easy to use SOTA AI model in just two commands:
 # pip install torch==1.13.1+cu117 torchvision==0.14.1 --extra-index-url https://download.pytorch.org/whl/cu117
 pip install lama-cleaner
 lama-cleaner --model=lama --device=cpu --port=8080
+
+# 带有文件管理器
+# https://lama-cleaner-docs.vercel.app/features/file_manager
+lama-cleaner --model=lama --device=cpu --port=8080 --input=C:\Users\14120\Desktop --output-dir=C:\Users\14120\Desktop
 ```
 
 That's it, Lama Cleaner is now running at http://localhost:8080
@@ -83,3 +87,9 @@ great online services [here](https://cleanup.pictures/).
 - Install dependencies:`cd lama_cleaner/app/ && pnpm install`
 - Start development server: `pnpm start`
 - Build: `pnpm build`
+
+
+# 相关单词,
+- inpaintine 图像修复
+
+

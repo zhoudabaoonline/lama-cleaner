@@ -8,7 +8,7 @@ from loguru import logger
 from lama_cleaner.const import *
 from lama_cleaner.runtime import dump_environment_info
 
-
+# 命令行解析
 def parse_args():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -77,6 +77,7 @@ def parse_args():
     )
 
     # Plugins
+    # 部分插件命令行解析
     parser.add_argument(
         "--enable-interactive-seg",
         action="store_true",

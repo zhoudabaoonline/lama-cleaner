@@ -16,9 +16,12 @@
 @use '../components/Shortcuts/Shortcuts';
 @use '../components/Settings/Settings.scss';
 @use '../components/SidePanel/SidePanel.scss';
+@use '../components/SidePanel/TextEditor.scss';
 @use '../components/Plugins/Plugins.scss';
 @use '../components/Croper/Croper.scss';
 @use '../components/InteractiveSeg/InteractiveSeg.scss';
+@use '../components/TextRecognition/TextRecognition.scss';
+
 
 // Shared
 @use '../components/FileSelect/FileSelect';
@@ -34,12 +37,12 @@
 *,
 *:before,
 *:after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 html,
 body {
-  font-family: 'WorkSans', sans-serif;
+    font-family: 'WorkSans', sans-serif;
 }

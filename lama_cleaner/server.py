@@ -4,6 +4,7 @@ import os
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
+# 服务端接口定义
 import imghdr
 import io
 import logging
@@ -179,7 +180,7 @@ def media_thumbnail_file(tab, filename):
     response.headers["X-Height"] = str(height)
     return response
 
-
+# 图像处理接口
 @app.route("/inpaint", methods=["POST"])
 def process():
     input = request.files
@@ -187,6 +188,7 @@ def process():
     origin_image_bytes = input["image"].read()
     image, alpha_channel, exif = load_img(origin_image_bytes, return_exif=True)
 
+    # 获取蒙版文件
     mask, _ = load_img(input["mask"].read(), gray=True)
     mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)[1]
 
@@ -260,6 +262,7 @@ def process():
 
     start = time.time()
     try:
+        # 模型开始处理
         res_np_img = model(image, mask, config)
     except RuntimeError as e:
         torch.cuda.empty_cache()
@@ -283,6 +286,7 @@ def process():
             (res_np_img, alpha_channel[:, :, np.newaxis]), axis=-1
         )
 
+    # 获取文件扩展信息
     ext = get_image_ext(origin_image_bytes)
 
     # fmt: off
@@ -292,6 +296,7 @@ def process():
         bytes_io = io.BytesIO(pil_to_bytes(Image.fromarray(res_np_img), ext, quality=image_quality))
     # fmt: on
 
+    # 开始响应发送
     response = make_response(
         send_file(
             # io.BytesIO(numpy_to_bytes(res_np_img, ext)),
@@ -551,6 +556,7 @@ def main(args):
 
     if args.gui:
         app_width, app_height = args.gui_size
+        # 后端服务
         from flaskwebgui import FlaskUI
 
         ui = FlaskUI(

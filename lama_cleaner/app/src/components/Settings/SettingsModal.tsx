@@ -1,11 +1,11 @@
 import React from 'react'
 import { useRecoilState, useRecoilValue } from 'recoil'
 import {
-  isDiffusionModelsState,
-  isPaintByExampleState,
-  isSDState,
-  settingState,
-} from '../../store/Atoms'
+    isDiffusionModelsState,
+    isPaintByExampleState,
+    isSDState,
+    settingState,
+} from '../../store/atoms/Atoms'
 import Modal from '../shared/Modal'
 import ManualRunInpaintingSettingBlock from './ManualRunInpaintingSettingBlock'
 import HDSettingBlock from './HDSettingBlock'
@@ -14,52 +14,56 @@ import DownloadMaskSettingBlock from './DownloadMaskSettingBlock'
 import useHotKey from '../../hooks/useHotkey'
 
 declare module 'react' {
-  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
-    // extends React's HTMLAttributes
-    directory?: string
-    webkitdirectory?: string
-  }
+    interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+        // extends React's HTMLAttributes
+        directory?: string
+        webkitdirectory?: string
+    }
 }
 
 interface SettingModalProps {
-  onClose: () => void
+    onClose: () => void
 }
 
 export default function SettingModal(props: SettingModalProps) {
-  const { onClose } = props
-  const [setting, setSettingState] = useRecoilState(settingState)
-  const isSD = useRecoilValue(isSDState)
-  const isDiffusionModels = useRecoilValue(isDiffusionModelsState)
+    const { onClose } = props
+    const [setting, setSettingState] = useRecoilState(settingState)
+    const isSD = useRecoilValue(isSDState)
+    const isDiffusionModels = useRecoilValue(isDiffusionModelsState)
 
-  const handleOnClose = () => {
-    setSettingState(old => {
-      return { ...old, show: false }
-    })
-    onClose()
-  }
+    const handleOnClose = () => {
+        setSettingState(old => {
+            return { ...old, show: false }
+        })
+        onClose()
+    }
 
-  useHotKey(
-    's',
-    () => {
-      setSettingState(old => {
-        return { ...old, show: !old.show }
-      })
-    },
-    {},
-    []
-  )
+    useHotKey(
+        's',
+        () => {
+            setSettingState(old => {
+                return { ...old, show: !old.show }
+            })
+        },
+        {},
+        []
+    )
 
-  return (
-    <Modal
-      onClose={handleOnClose}
-      title="Settings"
-      className="modal-setting"
-      show={setting.show}
-    >
-      <DownloadMaskSettingBlock />
-      {isDiffusionModels ? <></> : <ManualRunInpaintingSettingBlock />}
-      <ModelSettingBlock />
-      {isDiffusionModels ? <></> : <HDSettingBlock />}
-    </Modal>
-  )
+    return (
+        <Modal
+            onClose={handleOnClose}
+            title="Settings"
+            className="modal-setting"
+            show={setting.show}
+        >
+            {/* 下载蒙版设置 */}
+            <DownloadMaskSettingBlock />
+            {/* 手动处理设置 */}
+            {isDiffusionModels ? <></> : <ManualRunInpaintingSettingBlock />}
+            {/* 模型设置 */}
+            <ModelSettingBlock />
+            {/*  */}
+            {isDiffusionModels ? <></> : <HDSettingBlock />}
+        </Modal>
+    )
 }

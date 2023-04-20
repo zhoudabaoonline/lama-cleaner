@@ -1,22 +1,22 @@
 import { Options, useHotkeys } from 'react-hotkeys-hook'
 import { useRecoilValue } from 'recoil'
-import { appState } from '../store/Atoms'
+import { appState } from '../store/atoms/Atoms'
 
 const useHotKey = (
-  keys: string,
-  callback: any,
-  options?: Options,
-  deps?: any[]
+    keys: string,
+    callback: any,
+    options?: Options,
+    deps?: any[]
 ) => {
-  const app = useRecoilValue(appState)
+    const app = useRecoilValue(appState)
 
-  const ref = useHotkeys(
-    keys,
-    callback,
-    { ...options, enabled: !app.disableShortCuts },
-    deps
-  )
-  return ref
+    const ref = useHotkeys(
+        keys,
+        callback,
+        { ...options, enabled: !app.disableShortCuts },
+        deps
+    )
+    return ref
 }
 
 export default useHotKey
