@@ -29,6 +29,13 @@ export const paintByExampleImageState = atom<File | undefined>({
     default: undefined,
 })
 
+
+export const translate = atom<undefined>({
+    key: 'translate',
+    default: undefined,
+})
+
+
 export interface Rect {
     x: number
     y: number

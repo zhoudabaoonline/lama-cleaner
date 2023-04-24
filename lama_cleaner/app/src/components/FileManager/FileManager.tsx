@@ -174,10 +174,10 @@ export default function FileManager(props: Props) {
     const renderTitle = () => {
         return (
             <Flex
-                style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 12 }}
+                style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 12, flexDirection: "row" }}
             >
                 <div>{`图片 (${photos.length})`}</div>
-                <Flex>
+                <Flex style={{ flexDirection: "row" }}>
                     <Button
                         icon={<ViewHorizontalIcon />}
                         toolTip="横排"
@@ -207,7 +207,7 @@ export default function FileManager(props: Props) {
             className="file-manager-modal"
             show={show}
         >
-            <Flex style={{ justifyContent: 'space-between', gap: 8 }}>
+            <Flex style={{ justifyContent: 'space-between', gap: 8, flexDirection: "row" }}>
                 <Tabs.Root
                     className="TabsRoot"
                     defaultValue={tab}
@@ -222,11 +222,11 @@ export default function FileManager(props: Props) {
                         </Tabs.Trigger>
                     </Tabs.List>
                 </Tabs.Root>
-                <Flex style={{ gap: 8 }}>
+                <Flex style={{ gap: 8, flexDirection: "row" }}>
                     <Flex
                         style={{
                             position: 'relative',
-                            justifyContent: 'start',
+                            justifyContent: 'start', flexDirection: "row"
                         }}
                     >
                         <MagnifyingGlassIcon style={{ position: 'absolute', left: 8 }} />
@@ -244,7 +244,7 @@ export default function FileManager(props: Props) {
                             placeholder="请输入文件名"
                         />
                     </Flex>
-                    <Flex style={{ gap: 8 }}>
+                    <Flex style={{ gap: 8, flexDirection: "row" }}>
                         <Selector
                             width={140}
                             value={SortByMap[sortBy]}
@@ -317,6 +317,6 @@ export default function FileManager(props: Props) {
         </ScrollArea.Scrollbar> */}
                 <ScrollArea.Corner className="ScrollAreaCorner" />
             </ScrollArea.Root>
-        </Modal>
+        </Modal >
     )
 }

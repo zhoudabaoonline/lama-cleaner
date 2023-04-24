@@ -1,4 +1,6 @@
+/* eslint-disable no-param-reassign */
 import { SyntheticEvent, useEffect, useState } from 'react'
+
 
 export function dataURItoBlob(dataURI: string) {
     const mime = dataURI.split(',')[0].split(':')[1].split(';')[0]
@@ -59,6 +61,16 @@ export function shareImage(base64: string, name: string) {
         return true
     }
     return false
+}
+
+
+// 加载处理完成的图片切片
+export function loadImageSplice(image: HTMLImageElement, src: string) {
+
+
+
+    console.log(src)
+
 }
 
 export function loadImage(image: HTMLImageElement, src: string) {
@@ -138,6 +150,7 @@ export function resizeImageFile(
         canvas.getContext('2d')?.drawImage(image, 0, 0, width, height)
         const dataUrl = canvas.toDataURL('image/jpeg')
         const blob = dataURItoBlob(dataUrl)
+
         const f = new File([blob], file.name, {
             type: file.type,
         })
@@ -161,6 +174,75 @@ export function resizeImageFile(
         reader.readAsDataURL(file)
     })
 }
+
+
+interface CutFileResult {
+    file: File
+    resized: boolean
+    originalWidth?: number
+    originalHeight?: number
+}
+export function cutImageFile(
+    file: File,
+    originalWidth: number,
+    originalHeight: number,
+    pageNum: number,
+    pageSize: number,
+
+): Promise<CutFileResult> {
+    const reader = new FileReader()
+    const image = new Image()
+    image.src = URL.createObjectURL(file)
+    const canvas = document.createElement('canvas')
+
+    const resize = (): CutFileResult => {
+
+        const pn = Math.ceil(originalHeight / pageSize)
+        let nowHeight = 0
+        if (pageNum < pn) {
+            nowHeight = pageSize
+        } else if (pageNum === pn) {
+            nowHeight = originalHeight - (pageNum - 1) * pageSize
+        } else {
+            nowHeight = 0
+        }
+
+
+        const offset = (pageNum - 1) * pageSize
+        canvas.width = originalWidth
+        canvas.height = nowHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+            throw new Error('could not get context')
+        }
+        canvas.getContext('2d')?.drawImage(image, 0, -offset, originalWidth, originalHeight)
+        const dataUrl = canvas.toDataURL('image/jpeg')
+        const blob = dataURItoBlob(dataUrl)
+        console.log(blob, "cut file")
+        const f = new File([blob], file.name, {
+            type: file.type,
+        })
+        return {
+            file: f,
+            resized: true,
+            originalWidth: image.width,
+            originalHeight: image.height,
+        }
+    }
+
+    return new Promise((resolve, reject) => {
+        if (!file.type.match(/image.*/)) {
+            reject(new Error('Not an image'))
+            return
+        }
+        reader.onload = (readerEvent: any) => {
+            image.onload = () => resolve(resize())
+            image.src = readerEvent.target.result
+        }
+        reader.readAsDataURL(file)
+    })
+}
+
 
 export function keepGUIAlive() {
     async function getRequest(url = '') {
@@ -242,4 +324,75 @@ export async function copyCanvasImage(canvas: HTMLCanvasElement) {
     } catch {
         console.log('Copy image failed!')
     }
+}
+
+
+
+// 对已有的canvas对象做剪切,image 为原有 canva上的图片,
+// 返回一个新的canvas对象
+export function cutCanvas(canvas: HTMLCanvasElement, image: HTMLImageElement, pageNum: number, pageSize: number) {
+
+    const originalHeight = canvas.height
+    const originalWidth = canvas.width
+
+
+    const offset = (pageNum - 1) * pageSize
+    if (offset > originalHeight) {
+        return false
+    }
+
+    const pn = Math.ceil(originalHeight / pageSize)
+
+    let nowHeight = 0
+    if (pageNum < pn) {
+        nowHeight = pageSize
+    } else if (pageNum === pn) {
+        nowHeight = originalHeight - (pageNum - 1) * pageSize
+    } else {
+        nowHeight = 0
+    }
+
+
+    const tempCanvas: HTMLCanvasElement = document.createElement("canvas")
+    tempCanvas.width = originalWidth
+    tempCanvas.height = nowHeight
+
+    const ctx = tempCanvas.getContext("2d")
+    console.log(originalHeight, originalWidth, "yuanshi ")
+    ctx?.drawImage(image, 0, -offset, originalWidth, originalHeight)
+
+    const blob = dataURItoBlob(tempCanvas.toDataURL())
+    const turl = URL.createObjectURL(blob)
+
+    console.log("蒙版切片", turl)
+
+    return tempCanvas
+}
+
+
+
+// canvas 转图像
+export async function canvasToImage(canvas: HTMLCanvasElement) {
+    const generateImage = () => {
+        const dataUrl = canvas.toDataURL()
+        const blobn = dataURItoBlob(dataUrl)
+        const turl = URL.createObjectURL(blobn)
+        console.log("待处理蒙版", turl)
+
+        // 转文件,
+        const maskFile = new File([blobn], "temp.png", {
+            type: "image/png",
+        })
+        return maskFile
+    }
+
+    return new Promise<HTMLImageElement>((resolve, reject) => {
+        const tempImage = new Image()
+        const ti = generateImage()
+        tempImage.src = URL.createObjectURL(ti)
+        tempImage.onload = () => {
+            resolve(tempImage)
+        }
+    })
+
 }

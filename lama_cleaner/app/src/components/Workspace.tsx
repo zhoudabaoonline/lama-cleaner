@@ -28,6 +28,7 @@ import P2PSidePanel from './SidePanel/P2PSidePanel'
 import Plugins from './Plugins/Plugins'
 import Flex from './shared/Layout'
 import ImageSize from './ImageSize/ImageSize'
+import TextEditor from './SidePanel/TextEditor'
 
 const Workspace = () => {
     const setFile = useSetRecoilState(fileState)
@@ -135,6 +136,9 @@ const Workspace = () => {
             <SettingModal onClose={onSettingClose} />
             {/* 快捷键面板 */}
             <ShortcutsModal />
+            {/* 文本编辑区 */}
+            {isShow ? <TextEditor /> : <></>}
+
             <Toast
                 {...toastVal}
                 onOpenChange={(open: boolean) => {

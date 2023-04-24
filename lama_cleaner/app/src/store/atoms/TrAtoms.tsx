@@ -1,11 +1,14 @@
+/* eslint-disable camelcase */
 
 import { atom, selector } from 'recoil'
 import _ from 'lodash'
+import App from '../../App'
 
 
 interface Rectinfo {
     text: string,
     cfd: string,
+    trans: string,
 }
 
 export interface TextRect {
@@ -16,8 +19,26 @@ export interface TextRect {
     info: Rectinfo,
     top: number,
     left: number,
-    height: number,
+    // 行高,绘制文字用,
+    lineHeight: number,
+    // 识别区域高,
+    rectHeight: number,
+    // 高度偏移
+    heightOffset: number
+    // 宽度
     width: number,
+    // 对齐方式
+    align: string,
+    // 文字大小
+    size: number,
+    // 颜色
+    color: string,
+    // 字体
+    family: string
+    // 间距
+    space: number,
+
+
 }
 
 export interface TextRectListState {
@@ -28,13 +49,12 @@ export interface TextRectListState {
     isTring: boolean,
     isTrOk: boolean,
     isShow: boolean,
+    selectedIndex: number,
+    isShowColorPicker: boolean,
+    isCtrl: boolean,
     isDrawing: object,
+    showTans: boolean
 }
-
-export const drawClick = atom<any>({
-    key: 'drawClick',
-    default: undefined,
-})
 
 export const textRectListState = atom<TextRectListState>({
     key: "textRectListState",
@@ -46,8 +66,23 @@ export const textRectListState = atom<TextRectListState>({
         isTring: false,
         isTrOk: false,
         isShow: false,
+        selectedIndex: -1,
+        isShowColorPicker: false,
+        isCtrl: false,
         isDrawing: {},
+        showTans: false,
     }
+})
+
+export const drawClick = atom<any>({
+    key: 'drawClick',
+    default: undefined,
+})
+
+
+export const drawTextClick = atom<any>({
+    key: 'drawTextClick',
+    default: undefined,
 })
 
 
@@ -65,14 +100,32 @@ export const textRectList = selector({
 })
 
 
+// ctrl是否按下
+export const trGlobalState = selector({
+    key: 'trGlobalState',
+    get: ({ get }) => {
+        const app = get(textRectListState)
+        return app
+    },
+    set: ({ get, set }, stateInfo: any) => {
+        const app = get(textRectListState)
+        const temp: { [index: string]: any } = _.cloneDeep(app)
+        Object.keys(stateInfo).forEach((element: string) => {
+            temp[element] = stateInfo[element]
+        });
+        set(textRectListState, { ...app, ...temp })
+    },
+})
+
+
 // undo redo 文本识别数据
 export const textRectListUndoRedo = selector({
     key: 'textRectListUndoRedo',
     get: ({ get }) => {
         const app = get(textRectListState)
         return {
-            un: app.Undo_Index.length > 0,
-            re: app.Redo_Index.length > 0
+            un: app.Undo_Index,
+            re: app.Redo_Index
         }
     },
     set: ({ get, set }, UnOrRe: any) => {
@@ -93,6 +146,61 @@ export const textRectListUndoRedo = selector({
                 set(textRectListState, { ...app, Undo_Index: tempUndo, Redo_Index: tempRedo })
             }
         }
+    },
+})
+
+
+
+// 打开颜色选择器
+export const showColorPickerState = selector({
+    key: 'showColorPickerState',
+    get: ({ get }) => {
+        const app = get(textRectListState)
+        return app.isShowColorPicker
+
+    },
+    set: ({ get, set }, newValue: any) => {
+        const app = get(textRectListState)
+        set(textRectListState, { ...app, isShowColorPicker: !newValue })
+    },
+})
+
+
+// 修改文本识别框位置,,或者取名叫修改所选元素的相关属性
+export const textRectListModifyState = selector({
+    key: 'textRectListModifyState',
+    get: ({ get }) => {
+        const app = get(textRectListState)
+        if (app.selectedIndex > 0) {
+            return app.text_array[app.selectedIndex]
+        }
+    },
+    set: ({ get, set }, nodeInfo: any) => {
+        // nodeInfo:{}
+        const app = get(textRectListState)
+        if (app.selectedIndex > 0) {
+            // 给-1,就是撤销,其他的就是重做
+            const { text_array } = app
+            const temp = _.cloneDeep(text_array)
+            const t: { [key: string]: any } = temp[app.selectedIndex]
+            Object.keys(nodeInfo).forEach(element => {
+                t[element] = nodeInfo[element]
+            });
+            set(textRectListState, { ...app, text_array: temp })
+        }
+    },
+})
+
+// 修改数据
+export const selectedIndexState = selector({
+    key: 'selectedIndexState',
+    get: ({ get }) => {
+        const app = get(textRectListState)
+        return app.selectedIndex
+    },
+    set: ({ get, set }, selectedIndex: any) => {
+        const app = get(textRectListState)
+        set(textRectListState, { ...app, selectedIndex })
     },
 })
 

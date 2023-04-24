@@ -53,11 +53,11 @@ export default function ShortcutsModal() {
                 <div className="shortcut-options-column">
                     <ShortCut content="面板" keys={['空格 + 拖动']} />
                     <ShortCut content="重置缩放面板" keys={['Esc']} />
-                    <ShortCut content="减少笔数尺寸" keys={['[']} />
-                    <ShortCut content="增加笔数尺寸" keys={[']']} />
+                    <ShortCut content="减少笔刷尺寸" keys={['[']} />
+                    <ShortCut content="增加笔刷尺寸" keys={[']']} />
                     <ShortCut content="查看源图" keys={['按住 Tab']} />
                     <ShortCut
-                        content="Multi-Stroke Drawing"
+                        content="多线条绘制"
                         keys={[`按住 ${CmdOrCtrl}`]}
                     />
                     <ShortCut content="终止绘图" keys={['Esc']} />

@@ -3,12 +3,12 @@
 import { FolderIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { PlayIcon, ReloadIcon, } from '@radix-ui/react-icons'
 import { AlignLeft } from 'react-feather'
+import _ from "lodash"
 
 import React, { useCallback, useState } from 'react'
 import { useRecoilState, useRecoilValue } from 'recoil'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { textRecognition } from "../../adapters/inpainting"
-
 import {
     enableFileManagerState,
     fileState,
@@ -26,7 +26,8 @@ import {
     textRectListState,
     textRectListUndoRedo,
     isTrOkState,
-    isShowState
+    isShowState,
+    trGlobalState
 } from '../../store'
 import Button from '../shared/Button'
 import Shortcuts from '../Shortcuts/Shortcuts'
@@ -56,10 +57,14 @@ const Header = () => {
     const [isTring, setIsTring] = useRecoilState(isTringState)
     const [isTrOk, setIsTrOk] = useRecoilState(isTrOkState)
     const [isShow, setIsShow] = useRecoilState(isShowState)
+    const [trGlobal, setTrGlobal] = useRecoilState(trGlobalState)
 
     const [isUnRe, setTextRectUndoRedo] = useRecoilState(textRectListUndoRedo)
 
     const [TextRectLists, setTextRectList] = useRecoilState(textRectList)
+
+    const rateHeight = 0.2
+    const rateWidth = 0.1
 
 
     const onClickTR = async () => {
@@ -83,12 +88,21 @@ const Header = () => {
                             const kh = responseObj.splice_height
                             const items = responseObj.text_array
                             if (items) {
-                                console.log(items)
                                 items.forEach((item) => {
-                                    item.left = item.rect[0][0]
-                                    item.top = item.rect[0][1] + kh * item.pn
-                                    item.width = item.rect[1][0] - item.left
-                                    item.height = item.rect[2][1] - item.rect[1][1]
+                                    if (item) {
+                                        const [[x0, y0], [x1,], [, y2],] = [...item.rect]
+
+                                        item.lineHeight = y2 - item.rect[1][1]
+                                        item.rectHeight = item.lineHeight * (1 + rateHeight)
+                                        item.heightOffset = item.rectHeight * rateHeight / 2
+                                        item.left = x0 - 5
+                                        item.top = y0 + kh * item.pn - item.heightOffset
+                                        item.width = x1 - item.left + 10
+                                        item.size = item.rectHeight
+                                        item.space = 0
+                                        item.family = 'Microsoft YaHei'
+
+                                    }
                                 });
                                 setTextRectList(items)
                                 setIsTring(true)
@@ -145,6 +159,46 @@ const Header = () => {
         [isInpainting, handleRerunLastMask]
     )
 
+    const testCharGpt = async () => {
+        console.log("kaishi---------------------------")
+        const temp: { id: any; label: any }[] = []
+        const trTemp = _.cloneDeep(TextRectLists.text_array)
+        trTemp.forEach((element: { id: any; info: { text: any } }) => {
+            temp.push({ id: element.id, label: element.info.text })
+        });
+        const req = JSON.stringify(temp)
+        const promp = "请把下面的json字符串中属性名为label的值取出翻译成韩文,并保存到属性trans中;"
+        const t = JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: promp + req }], temperature: 0.7 })
+        try {
+            await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer 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'
+                },
+                body: t,
+            }).then(res => res.json()).then(data => {
+                console.log("jieshu---------------------------")
+                console.log(data.choices[0].message.content)
+                const v: [{ id: number, label: string, trans: string }] = JSON.parse(data.choices[0].message.content)
+                v.forEach((element, index) => {
+                    trTemp[index].info.trans = element.trans
+                });
+                setTextRectList(trTemp)
+                setTrGlobal({ showTrans: true })
+
+                // return data
+                console.log("jieshu")
+            }).catch((err) => {
+                console.log(err);
+            })
+
+        } catch (e) {
+            console.log(e)
+        }
+
+
+    }
 
 
     const undo = () => {
@@ -203,6 +257,16 @@ const Header = () => {
                         </Button>
                     </label>
 
+
+
+                    <Button
+                        icon={<PhotoIcon />}
+                        style={{ border: 0, gap: 0 }}
+                        disabled={isInpainting}
+                        toolTip="一键翻译"
+                        onClick={testCharGpt}
+                    />
+
                     {/* 如果文件已经选定,那么才可以显示识别对话框 */}
                     {file ? (
                         <div style={{ display: "flex", flexDirection: "row" }}>
@@ -230,7 +294,7 @@ const Header = () => {
                                     </svg>
                                 }
                                 onClick={undo}
-                                disabled={!isUnRe.un}
+                                disabled={!(isUnRe.un.length > 0)}
                             />
                             <Button
                                 toolTip="重做"
@@ -250,7 +314,7 @@ const Header = () => {
                                     </svg>
                                 }
                                 onClick={redo}
-                                disabled={!isUnRe.re}
+                                disabled={!(isUnRe.re.length > 0)}
                             />
                         </div>
                     ) : (<></>)

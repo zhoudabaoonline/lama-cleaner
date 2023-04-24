@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { useRecoilState } from 'recoil';
-import { textRectList, textRectListHidden, isShowState } from '../../store';
+import { textRectList, textRectListHidden, isShowState, selectedIndexState, trGlobalState } from '../../store';
 
 // 当前组件插入在editor/editor下
 const TextRecognition = () => {
@@ -8,14 +8,17 @@ const TextRecognition = () => {
     const [, setTextRectListItemHidden] = useRecoilState(textRectListHidden)
     const [isShow, setIsShow] = useRecoilState(isShowState)
 
+    const [selectedIndex, setSelectedIndex] = useRecoilState(selectedIndexState)
+    const [trGlobal, setTrGlobal] = useRecoilState(trGlobalState)
+
+
+
     const removeTextRect = (hiddenIndex: number) => {
         setTextRectListItemHidden(hiddenIndex)
     }
-    const selectedIndex = useRef(-1)
 
     const selected = (index: number) => {
-        console.log("d")
-        selectedIndex.current = index
+        setSelectedIndex(index)
     }
 
 
@@ -28,13 +31,12 @@ const TextRecognition = () => {
 
     const onChange = (index: number | undefined) => {
         if (index) {
-            const html = Refs[index].current;
-            console.log(html)
+            // const html = Refs[index].current;
+            // console.log(html)
         }
     }
 
 
-    console.log(isShow)
     return (
         <div className="textRectContainer" style={{ display: isShow ? "block" : 'none' }}>
             {
@@ -50,13 +52,20 @@ const TextRecognition = () => {
                             className='textRegonition'
                             aria-hidden="true"
                             style={{
-                                height: `${item.height}px`, width: `${item.width}px`,
-                                fontSize: `${item.height - 4}px`, lineHeight: `${item.height - 2}px`, textAlign: "center",
-                                border: selectedIndex.current === Index ? '1px solid red' : '1px solid blue'
+                                height: `${item.rectHeight}px`, width: `${item.width}px`,
+                                border: selectedIndex === Index ? '1px solid red' : '1px solid blue',
                             }}
                         >
                             <div className='closeArea' aria-hidden="true" style={{ left: `${item.width}px` }} onClick={() => removeTextRect(Index)}>X</div>
                             <div
+                                style={{
+                                    color: `${item.color}`,
+                                    fontSize: `${item.size}px`, lineHeight: `${item.rectHeight}px`,
+                                    letterSpacing: `${item.space}px`,
+                                    fontFamily: `${item.family}`,
+                                    whiteSpace: "nowrap"
+                                }}
+
                                 key={`text${item.id}`}
                                 className='text'
                                 // 写法参考https://en.leezx.cn/posts/2021/08/30/_0830-how-to-use-multiple-refs-for-an-array-of-elements.html
@@ -65,12 +74,7 @@ const TextRecognition = () => {
                                 onInput={() => onChange(Index)}
                                 onBlur={() => onChange(Index)}
                                 suppressContentEditableWarning
-                            >{item.info.text}</div>
-                        </div>
-                        <div className='editArea' style={{ visibility: selectedIndex.current === Index ? 'visible' : 'hidden' }}>
-                            <div>选择字体</div>
-                            <div>选择大小</div>
-                            <div>排版</div>
+                            >{trGlobal.showTrans ? item.info.trans : item.info.text}{trGlobal.showTrans}</div>
                         </div>
                     </div>
                 ))

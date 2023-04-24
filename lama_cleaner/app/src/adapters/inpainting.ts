@@ -9,6 +9,7 @@ export const TEXT_RECOGNITION_API_ENDPOINT = `${process.env.REACT_APP_TEXTRECOGN
 
 // 图像处理api接口
 export default async function inpaint(
+    spliceId: number,
     imageFile: File,
     settings: Settings,
     croperRect: Rect,
@@ -22,6 +23,8 @@ export default async function inpaint(
     // 1080, 2000, Original
     const fd = new FormData()
     fd.append('image', imageFile)
+    fd.append('spliceId', spliceId.toString())
+
     if (maskBase64 !== undefined) {
         fd.append('mask', dataURItoBlob(maskBase64))
     } else if (customMask !== undefined) {
@@ -106,7 +109,8 @@ export default async function inpaint(
         if (res.ok) {
             const blob = await res.blob()
             const newSeed = res.headers.get('x-seed')
-            return { blob: URL.createObjectURL(blob), seed: newSeed }
+            const newSpliceId = res.headers.get('splice-id')
+            return { blob: URL.createObjectURL(blob), seed: newSeed, spliceId: newSpliceId }
         }
         const errMsg = await res.text()
         throw new Error(errMsg)

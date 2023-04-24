@@ -22,6 +22,10 @@ declare module '*.bmp' {
 declare module "react/jsx-runtime" {
     export default any;
 }
+declare module 'react-color' {
+    export default any;
+}
+
 
 declare module '*.gif' {
     const src: string;
