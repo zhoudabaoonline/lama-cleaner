@@ -30,6 +30,10 @@ import {
     loadImage,
     srcToFile,
     useImage,
+    cutImageFile,
+    dataURItoBlob,
+    cutCanvas,
+    canvasToImage
 } from '../../utils'
 import {
     appState,
@@ -58,6 +62,9 @@ import {
     TextRectListState,
     isTrOkState,
     drawClick,
+    textRectListUndoRedo,
+    selectedIndexState, trGlobalState,
+    drawTextClick,
     isShowState
 } from '../../store'
 import useHotKey from '../../hooks/useHotkey'
@@ -75,7 +82,6 @@ import InteractiveSegReplaceModal from '../InteractiveSeg/ReplaceModal'
 import TextRecognition from '../TextRecognition/TextRecognition'
 import { PluginName } from '../Plugins/Plugins'
 import MakeGIF from './MakeGIF'
-import TextEditor from '../SidePanel/TextEditor'
 
 
 const TOOLBAR_SIZE = 200
@@ -152,6 +158,9 @@ export default function Editor() {
     const [renders, setRenders] = useState<HTMLImageElement[]>([])
     const [context, setContext] = useState<CanvasRenderingContext2D>()
     const [maskCanvas] = useState<HTMLCanvasElement>(() => { return document.createElement('canvas') })
+
+    const [textCanvas] = useState<HTMLCanvasElement>(() => { return document.createElement('canvas') })
+
     const [lineGroups, setLineGroups] = useState<LineGroup[]>([])
     const [lastLineGroup, setLastLineGroup] = useState<LineGroup>([])
     const [curLineGroup, setCurLineGroup] = useState<LineGroup>([])
@@ -196,40 +205,95 @@ export default function Editor() {
     const [isDrawing, setIsDrawing] = useRecoilState(isDrawingState)
     const [isTrOk, setIsTrOk] = useRecoilState(isTrOkState)
     const [isDrawClick, setDrawClick] = useRecoilState(drawClick)
-
     const [isShow, setIsShow] = useRecoilState(isShowState)
+    const [trGlobal, setTrGlobal] = useRecoilState(trGlobalState)
+    const [isDrawTextClick, setDrawTextClick] = useRecoilState(drawTextClick)
+
+
+    const undoRedoIndex = useRecoilValue(textRectListUndoRedo)
+
+
 
     // 转换文字识别区域信息成为线段信息
     // 使用闭包吧方法传递过去方便其他的组件做事件调用
     function textRectToLines() {
-        let brushSizes = 0
-        let lineGroup: LineGroup = []
-        if (isMultiStrokeKeyPressed || runMannually) {
-            lineGroup = [...curLineGroup]
+        return () => {
+            let brushSizes = 0
+            let lineGroup: LineGroup = []
+            if (isMultiStrokeKeyPressed || runMannually) {
+                lineGroup = [...curLineGroup]
+            }
+
+            textRectLists.text_array.forEach((element, index) => {
+                const temp: { x: number, y: number }[] = []
+                brushSizes = element.rectHeight / 2
+                // 去掉已经删除的
+                if (!undoRedoIndex.un.includes(index)) {
+                    // 横坐标要减去半径,开始坐标
+                    temp.push({ x: element.left + brushSizes, y: element.top + brushSizes })
+                    // 结束坐标
+                    temp.push({ x: element.left - brushSizes + element.width, y: element.top + brushSizes })
+
+                    // 创建一组新的数据
+                    lineGroup.push({ size: brushSizes * 2, pts: temp, lineCap: 'square' })
+                }
+            });
+            // 保存当前绘制的线段
+            setCurLineGroup(lineGroup)
+            // 绘制蒙版到当前render上
+            drawOnCurrentRender(lineGroup)
         }
-
-        textRectLists.text_array.forEach(element => {
-            const temp: { x: number, y: number }[] = []
-            brushSizes = element.height / 2
-            // 横坐标要减去半径
-            temp.push({ x: element.left + brushSizes, y: element.top + brushSizes })
-            temp.push({ x: element.left - brushSizes + element.width, y: element.top + brushSizes })
-
-            // 创建一组新的数据
-            lineGroup.push({ size: brushSizes * 2, pts: temp, lineCap: 'square' })
-
-        });
-        // 保存当前绘制的线段
-        setCurLineGroup(lineGroup)
-        // 绘制蒙版到当前render上
-        drawOnCurrentRender(lineGroup)
-
     }
 
     // 使用闭包传递控制函数,,这里一定要把textRectlists加上,否则上面的闭包可能获取不到相关函数
-    // useEffect(() => {
-    //     setDrawClick(textRectToLines)
-    // }, [textRectLists, curLineGroup, setCurLineGroup, isMultiStrokeKeyPressed, runMannually])
+    useEffect(() => {
+        setDrawClick(textRectToLines)
+    }, [textRectLists, curLineGroup, setCurLineGroup, isMultiStrokeKeyPressed, runMannually])
+
+
+
+    function drawText() {
+        return () => {
+            if (textCanvas) {
+                const rate = 1
+
+                textCanvas.width = imageWidth
+                textCanvas.height = imageHeight
+                const textContext = textCanvas.getContext("2d")
+
+                if (textContext) {
+                    textContext.setTransform(rate, 0, 0, rate, 0, 0);
+                    if (renders.length > 0) {
+                        textContext.drawImage(renders[renders.length - 1], 0, 0, imageWidth * rate, imageHeight * rate)
+                    } else {
+                        textContext.drawImage(original, 0, 0, imageWidth * rate, imageHeight * rate)
+                    }
+
+                    textRectLists.text_array.forEach((nodeInfo) => {
+                        textContext.font = `${nodeInfo.size}px ${nodeInfo.family}`
+                        textContext.fillStyle = `${nodeInfo.color ? nodeInfo.color : 'red'}`
+                        if (trGlobal.showTrans) {
+                            textContext.fillText(nodeInfo.info.trans, nodeInfo.left, nodeInfo.top + nodeInfo.rectHeight - nodeInfo.heightOffset)
+                        } else {
+                            textContext.fillText(nodeInfo.info.text, nodeInfo.left, nodeInfo.top + nodeInfo.rectHeight - nodeInfo.heightOffset)
+                        }
+                    })
+                    const image = new Image(imageWidth * rate, imageHeight * rate);
+                    image.src = textCanvas.toDataURL('image/png', 1)
+                    const url = image.src.replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+                    window.open(url)
+                }
+            } else {
+                console.log(" context is null ")
+            }
+        }
+
+    }
+
+    useEffect(() => {
+        setDrawTextClick(drawText)
+    }, [textRectLists, imageWidth, imageHeight, textCanvas, renders])
+
 
     // 在画布上绘图
     const draw = useCallback(
@@ -252,7 +316,6 @@ export default function Editor() {
                 context.drawImage(interactiveSegMask, 0, 0, imageWidth, imageHeight)
             }
             // 绘制线段
-            console.log(lineCap, "lineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCap")
             drawLines(context, lineGroup, undefined)
         },
         [
@@ -264,6 +327,39 @@ export default function Editor() {
             imageWidth,
         ]
     )
+
+    // 在画布上增量绘图,
+    const drawSplice = useCallback(
+        (render: HTMLImageElement, spliceId: number) => {
+            if (!context) {
+                return
+            }
+            console.log(
+                `[draw] 渲染 size: ${render.width}x${render.height} 图像 size: ${imageWidth}x${imageHeight} canvas size: ${context.canvas.width}x${context.canvas.height}`
+            )
+
+            // context.clearRect(0, 0, context.canvas.width, context.canvas.height)
+            context.drawImage(render, 0, (spliceId - 1) * trGlobal.splice_height, render.width, render.height)
+            // 这里应该是绘制交互片段的底片的
+            if (isInteractiveSeg && tmpInteractiveSegMask !== null) {
+                context.drawImage(tmpInteractiveSegMask, 0, 0, render.width, imageHeight)
+            }
+            // 这里是绘制交互片段的蒙版的
+            if (!isInteractiveSeg && interactiveSegMask !== null) {
+                context.drawImage(interactiveSegMask, 0, 0, imageWidth, imageHeight)
+            }
+        },
+        [
+            context,
+            isInteractiveSeg,
+            tmpInteractiveSegMask,
+            interactiveSegMask,
+            imageHeight,
+            imageWidth,
+        ]
+    )
+
+
 
     // 绘制鼠标mask
     const drawLinesOnMask = useCallback(
@@ -346,6 +442,10 @@ export default function Editor() {
             maskImage?: HTMLImageElement | null,
             paintByExampleImage?: File
         ) => {
+
+            console.log(useLastLineGroup, customMask, maskImage, paintByExampleImage, "dddddddddddddddddddddddddddd")
+
+
             // customMask: mask uploaded by user
             // maskImage: mask from interactive segmentation
             if (file === undefined) {
@@ -383,14 +483,19 @@ export default function Editor() {
             setIsDraging(false)
             setIsInpainting(true)
             if (settings.graduallyInpainting) {
+                console.log("dddd 绘制开始")
                 drawLinesOnMask([maskLineGroup], maskImage)
             } else {
+                console.log("sssss")
                 drawLinesOnMask(newLineGroups)
             }
 
             let targetFile = file
             if (settings.graduallyInpainting === true) {
+                console.log("dddd")
                 if (useLastLineGroup === true) {
+                    console.log("ddddssss")
+
                     // renders.length == 1 还是用原来的
                     if (renders.length > 1) {
                         const lastRender = renders[renders.length - 2]
@@ -401,8 +506,7 @@ export default function Editor() {
                         )
                     }
                 } else if (renders.length > 0) {
-                    console.info('gradually inpainting on last result')
-
+                    console.log("render render render")
                     const lastRender = renders[renders.length - 1]
                     targetFile = await srcToFile(
                         lastRender.currentSrc,
@@ -412,61 +516,104 @@ export default function Editor() {
                 }
             }
 
-            try {
-                // 提交到服务器处理
-                const res = await inpaint(
-                    targetFile,
-                    settings,
-                    croperRect,
-                    promptVal,
-                    negativePromptVal,
-                    seedVal,
-                    useCustomMask ? undefined : maskCanvas.toDataURL(),
-                    useCustomMask ? customMask : undefined,
-                    paintByExampleImage
-                )
-                if (!res) {
-                    throw new Error('Something went wrong on server side.服务端报错')
-                }
-                const { blob, seed } = res
-                if (seed) {
-                    setSeed(parseInt(seed, 10))
-                }
-                const newRender = new Image()
-                await loadImage(newRender, blob)
 
-                if (useLastLineGroup === true) {
-                    const prevRenders = renders.slice(0, -1)
-                    // 保存图像
-                    const newRenders = [...prevRenders, newRender]
-                    setRenders(newRenders)
-                } else {
-                    // 保存图像
-                    const newRenders = [...renders, newRender]
-                    setRenders(newRenders)
+            // 循环处理多个图片
+            const t = Math.ceil(imageHeight / trGlobal.splice_height)
+            for (let i = 0; i <= t; i += 1) {
+                const splicePicId = i + 1
+
+                // // 主要是处理maskcanvas,分割,和targetfile分割,
+
+                // eslint-disable-next-line no-await-in-loop
+                const pfile = await cutImageFile(file, imageWidth, imageHeight, i + 1, trGlobal.splice_height)
+                targetFile = pfile.file
+
+                // 蒙版转图像
+                // eslint-disable-next-line no-await-in-loop
+                const tempImage = await canvasToImage(maskCanvas)
+                // 蒙版切片
+                const nowMaskCanvas = cutCanvas(maskCanvas, tempImage, i + 1, 2000)
+
+                if (!nowMaskCanvas) {
+                    return
                 }
 
-                draw(newRender, [])
-                // Only append new LineGroup after inpainting success
-                setLineGroups(newLineGroups)
+                try {
+                    // 提交到服务器处理
 
-                // clear redo stack
-                // 清空重做堆栈
-                resetRedoState()
-            } catch (e: any) {
-                // 捕获到错误,显示提示弹窗
-                setToastState({
-                    open: true,
-                    desc: e.message ? e.message : e.toString(),
-                    state: 'error',
-                    duration: 4000,
-                })
-                drawOnCurrentRender([])
+                    // console.log(targetFile, settings, croperRect, promptVal, negativePromptVal, seedVal, useCustomMask, paintByExampleImage, "dddddddddddddddddddddddddddddd")
+                    // console.log(maskCanvas.toDataURL())
+                    // console.log(customMask)
+                    // eslint-disable-next-line no-await-in-loop
+                    const res = await inpaint(
+                        splicePicId,
+                        targetFile,
+                        settings,
+                        croperRect,
+                        promptVal,
+                        negativePromptVal,
+                        seedVal,
+                        useCustomMask ? undefined : nowMaskCanvas.toDataURL(),
+                        useCustomMask ? customMask : undefined,
+                        paintByExampleImage
+                    )
+                    if (!res) {
+                        throw new Error('Something went wrong on server side.服务端报错')
+                    }
+                    const { blob, seed, spliceId } = res
+                    console.log(blob, "xin blob")
+                    console.log(spliceId, "spliceid")
+
+
+                    if (seed) {
+                        setSeed(parseInt(seed, 10))
+                    }
+                    const newRender = new Image()
+                    // eslint-disable-next-line no-await-in-loop
+                    await loadImage(newRender, blob)
+
+                    // if (useLastLineGroup === true) {
+                    //     const prevRenders = renders.slice(0, -1)
+                    //     // 保存图像
+                    //     const newRenders = [...prevRenders, newRender]
+                    //     setRenders(newRenders)
+                    // } else {
+                    //     // 保存图像
+                    //     const newRenders = [...renders, newRender]
+                    //     setRenders(newRenders)
+                    // }
+
+                    // draw(newRender, [])
+                    if (spliceId) {
+                        drawSplice(newRender, parseInt(spliceId, 10))
+                    }
+
+                    // Only append new LineGroup after inpainting success
+                    setLineGroups(newLineGroups)
+
+                    // clear redo stack
+                    // 清空重做堆栈
+                    resetRedoState()
+                } catch (e: any) {
+                    // 捕获到错误,显示提示弹窗
+                    setToastState({
+                        open: true,
+                        desc: e.message ? e.message : e.toString(),
+                        state: 'error',
+                        duration: 4000,
+                    })
+                    drawOnCurrentRender([])
+                }
+                setIsInpainting(false)
+                setPrevInteractiveSegMask(maskImage)
+                setTmpInteractiveSegMask(null)
+                setInteractiveSegMask(null)
+
             }
-            setIsInpainting(false)
-            setPrevInteractiveSegMask(maskImage)
-            setTmpInteractiveSegMask(null)
-            setInteractiveSegMask(null)
+
+
+
+
         },
         [
             lineGroups,
@@ -770,9 +917,11 @@ export default function Editor() {
             return
         }
 
+
         const [width, height] = getCurrentWidthHeight()
         setImageWidth(width)
         setImageHeight(height)
+        console.log(width, height, "width,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightg")
 
         const rW = windowSize.width / width
         const rH = (windowSize.height - TOOLBAR_SIZE) / height
@@ -921,7 +1070,7 @@ export default function Editor() {
 
     // 鼠标移动的时候
     const onMouseDrag = (ev: SyntheticEvent) => {
-        if (isTring) {
+        if (isShow) {
             return
         }
         if (isChangingBrushSizeByMouse) {
@@ -946,7 +1095,6 @@ export default function Editor() {
             return
         }
         // 鼠标按下,并且拖动的时候开始保存线段数据
-        console.log(curLineGroup, "curlinegroupcurlinegroupcurlinegroupcurlinegroupcurlinegroup")
         const lineGroup = [...curLineGroup]
         // 在最新一组当中插入数据
         lineGroup[lineGroup.length - 1].pts.push(mouseXY(ev))
@@ -1070,7 +1218,7 @@ export default function Editor() {
 
     // 鼠标按下就开始捕获数据,
     const onMouseDown = (ev: SyntheticEvent) => {
-        if (isTring) {
+        if (isShow) {
             return
         }
         if (isProcessing) {
@@ -1343,7 +1491,7 @@ export default function Editor() {
                 downloadToOutput(renders[renders.length - 1], file.name, file.type)
                 setToastState({
                     open: true,
-                    desc: `Save image success`,
+                    desc: `保存图像成功`,
                     state: 'success',
                     duration: 2000,
                 })
@@ -1391,7 +1539,7 @@ export default function Editor() {
             console.log("grab")
             return 'grab'
         }
-        if (isTring) {
+        if (isShow) {
             console.log("cursor")
             return 'cursor'
         }
@@ -1401,7 +1549,7 @@ export default function Editor() {
         }
 
         return undefined
-    }, [showBrush, isPanning, isTring])
+    }, [showBrush, isPanning, isShow])
 
     // Standard Hotkeys for Brush Size
     useHotKey('[', () => {
@@ -1443,7 +1591,7 @@ export default function Editor() {
                     await copyCanvasImage(context?.canvas)
                     setToastState({
                         open: true,
-                        desc: 'Copy inpainting result to clipboard',
+                        desc: '已复制处理结果到剪切板',
                         state: 'success',
                         duration: 3000,
                     })
@@ -1475,6 +1623,16 @@ export default function Editor() {
         }
     )
 
+    // useHotKey(
+    //     'ctrl',
+    //     () => {
+    //         if (runMannually && hadDrawSomething()) {
+    //             runInpainting()
+    //         }
+    //     },
+    //     {}
+    // )
+
     useKeyPressEvent(
         'Alt',
         ev => {
@@ -1482,11 +1640,15 @@ export default function Editor() {
             ev?.stopPropagation()
             setIsChangingBrushSizeByMouse(true)
             setChangeBrushSizeByMouseInit({ x, y, brushSize })
+            console.log("alt is pressed")
+
         },
         ev => {
             ev?.preventDefault()
             ev?.stopPropagation()
             setIsChangingBrushSizeByMouse(false)
+            console.log("alt is pressed")
+
         }
     )
 
@@ -1582,7 +1744,7 @@ export default function Editor() {
 
                     <div className="editor-canvas-container">
                         {/* 用来展示识别出来的文字 */}
-                        {isTring ? <TextRecognition /> : <></>}
+                        {isShow ? <TextRecognition /> : <></>}
 
                         <canvas
                             className="editor-canvas"
@@ -1675,6 +1837,7 @@ export default function Editor() {
             onMouseMove={onMouseMove}
             onMouseUp={onPointerUp}
         >
+            <div className='showImage' />
             <MakeGIF renders={renders} />
             <InteractiveSegConfirmActions
                 onAcceptClick={onInteractiveAccept}
@@ -1684,14 +1847,14 @@ export default function Editor() {
 
             {/* 这里显示的笔刷组件  brush */}
             {showBrush &&
-                !isTring &&
+                !isShow &&
                 !isInpainting &&
                 !isPanning &&
                 // eslint-disable-next-line no-nested-ternary
                 (isInteractiveSeg ? (
                     renderInteractiveSegCursor()
                 ) :
-                    !isTring ?
+                    !isShow ?
                         <div
                             className="brush-shape"
                             style={getBrushStyle(
@@ -1821,8 +1984,6 @@ export default function Editor() {
                     )}
                 </div>
             </div>
-
-            {isShow ? <TextEditor onClick={textRectToLines} /> : <></>}
 
             <InteractiveSegReplaceModal
                 show={showInteractiveSegModal}
