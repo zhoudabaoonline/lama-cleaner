@@ -174,7 +174,7 @@ const Header = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer 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'
+                    // 'Authorization': 'Bearer '
                 },
                 body: t,
             }).then(res => res.json()).then(data => {
