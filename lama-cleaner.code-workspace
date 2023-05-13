@@ -1,0 +1,14 @@
+{
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "lama_cleaner/app"
+    },
+    {
+      "path": "translate"
+    }
+  ],
+  "settings": {}
+}

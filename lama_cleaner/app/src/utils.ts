@@ -22,6 +22,7 @@ export const getTextRectCord = (item: any, trSpliceHeight: number) => {
     return item
 }
 
+
 export function dataURItoBlob(dataURI: string) {
     const mime = dataURI.split(',')[0].split(':')[1].split(';')[0]
     const binary = atob(dataURI.split(',')[1])

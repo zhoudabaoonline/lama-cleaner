@@ -2,6 +2,7 @@
 
 import { atom, selector } from 'recoil'
 import _ from 'lodash'
+import App from '../../App'
 
 interface Rectinfo {
     text: string,
@@ -78,16 +79,19 @@ export const textRectListState = atom<TextRectListState>({
     }
 })
 
+export const drawClick = atom<any>({
+    key: 'drawClick',
+    default: undefined,
+})
+
+
+
 
 export const isGetingColorState = atom<boolean>({
     key: "isGetingColorState",
     default: false
 })
 
-export const drawClick = atom<any>({
-    key: 'drawClick',
-    default: undefined,
-})
 
 export const FileName = atom<any>({
     key: 'fileName',
@@ -148,17 +152,6 @@ export const textRectList = selector({
     },
 })
 
-
-
-// lineTop: number,
-// lineLeft: number,
-// lineHeight: number,
-// lineWidth: number,
-// // 识别区域
-// rectTop: number,
-// rectLeft: number,
-// rectHeight: number,
-// rectWidth: number,
 
 
 // ctrl是否按下

@@ -178,6 +178,46 @@ const Header = () => {
         [isInpainting, handleRerunLastMask]
     )
 
+    const testCharGpt = async () => {
+        console.log("kaishi---------------------------")
+        const temp: { id: any; label: any }[] = []
+        const trTemp = _.cloneDeep(TextRectLists.text_array)
+        trTemp.forEach((element: { id: any; info: { text: any } }) => {
+            temp.push({ id: element.id, label: element.info.text })
+        });
+        const req = JSON.stringify(temp)
+        const promp = "请把下面的json字符串中属性名为label的值取出翻译成韩文,并保存到属性trans中;"
+        const t = JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: promp + req }], temperature: 0.7 })
+        try {
+            await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': 'Bearer '
+                },
+                body: t,
+            }).then(res => res.json()).then(data => {
+                console.log("jieshu---------------------------")
+                console.log(data.choices[0].message.content)
+                const v: [{ id: number, label: string, trans: string }] = JSON.parse(data.choices[0].message.content)
+                v.forEach((element, index) => {
+                    trTemp[index].info.trans = element.trans
+                });
+                setTextRectList(trTemp)
+                setTrGlobal({ showTrans: true })
+
+                // return data
+                console.log("jieshu")
+            }).catch((err) => {
+                console.log(err);
+            })
+
+        } catch (e) {
+            console.log(e)
+        }
+
+
+    }
 
 
     const undo = () => {

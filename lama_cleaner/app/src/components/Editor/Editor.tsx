@@ -542,7 +542,6 @@ export default function Editor() {
                 context.drawImage(interactiveSegMask, 0, 0, imageWidth, imageHeight)
             }
             // 绘制线段
-
             drawLines(context, lineGroup, undefined)
         },
         [
@@ -554,6 +553,39 @@ export default function Editor() {
             imageWidth,
         ]
     )
+
+    // 在画布上增量绘图,
+    const drawSplice = useCallback(
+        (render: HTMLImageElement, spliceId: number) => {
+            if (!context) {
+                return
+            }
+            console.log(
+                `[draw] 渲染 size: ${render.width}x${render.height} 图像 size: ${imageWidth}x${imageHeight} canvas size: ${context.canvas.width}x${context.canvas.height}`
+            )
+
+            // context.clearRect(0, 0, context.canvas.width, context.canvas.height)
+            context.drawImage(render, 0, (spliceId - 1) * trGlobal.splice_height, render.width, render.height)
+            // 这里应该是绘制交互片段的底片的
+            if (isInteractiveSeg && tmpInteractiveSegMask !== null) {
+                context.drawImage(tmpInteractiveSegMask, 0, 0, render.width, imageHeight)
+            }
+            // 这里是绘制交互片段的蒙版的
+            if (!isInteractiveSeg && interactiveSegMask !== null) {
+                context.drawImage(interactiveSegMask, 0, 0, imageWidth, imageHeight)
+            }
+        },
+        [
+            context,
+            isInteractiveSeg,
+            tmpInteractiveSegMask,
+            interactiveSegMask,
+            imageHeight,
+            imageWidth,
+        ]
+    )
+
+
 
     // 绘制鼠标mask
     const drawLinesOnMask = useCallback(
@@ -683,15 +715,18 @@ export default function Editor() {
             setIsInpainting(true)
             // 这里会创建新的maskcanvas,,蒙版数据,maskcanvas再里面
             if (settings.graduallyInpainting) {
+                console.log("dddd 绘制开始")
                 drawLinesOnMask([maskLineGroup], maskImage)
             } else {
+                console.log("sssss")
                 drawLinesOnMask(newLineGroups)
             }
 
             let targetFile = file
             if (settings.graduallyInpainting === true) {
-
                 if (useLastLineGroup === true) {
+                    console.log("ddddssss")
+
                     // renders.length == 1 还是用原来的
                     if (renders.length > 1) {
                         const lastRender = renders[renders.length - 2]
@@ -754,11 +789,8 @@ export default function Editor() {
                 // Only append new LineGroup after inpainting success
                 setLineGroups(newLineGroups)
 
-                // clear redo stack
-                // 清空重做堆栈
-                resetRedoState()
-            } catch (e: any) {
-                // 捕获到错误,显示提示弹窗
+            }
+            catch (e: any) {
                 setToastState({
                     open: true,
                     desc: e.message ? e.message : e.toString(),
@@ -767,10 +799,8 @@ export default function Editor() {
                 })
                 drawOnCurrentRender([])
             }
-            setIsInpainting(false)
-            setPrevInteractiveSegMask(maskImage)
-            setTmpInteractiveSegMask(null)
-            setInteractiveSegMask(null)
+
+
         },
         [file, lineGroups, setIsInpainting, settings, lastLineGroup, hadDrawSomething, curLineGroup, drawLinesOnMask, renders, fileName, croperRect, promptVal, negativePromptVal, seedVal, maskCanvas, draw, setSeed, setRenders, setToastState, drawOnCurrentRender]
     )
@@ -1043,9 +1073,11 @@ export default function Editor() {
             return
         }
 
+
         const [width, height] = getCurrentWidthHeight()
         setImageWidth(width)
         setImageHeight(height)
+        console.log(width, height, "width,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightgwidth,heightg")
 
         const rW = windowSize.width / width
         const rH = (windowSize.height - TOOLBAR_SIZE) / height
@@ -1751,6 +1783,16 @@ export default function Editor() {
         }
     )
 
+    // useHotKey(
+    //     'ctrl',
+    //     () => {
+    //         if (runMannually && hadDrawSomething()) {
+    //             runInpainting()
+    //         }
+    //     },
+    //     {}
+    // )
+
     useKeyPressEvent(
         'Alt',
         ev => {
@@ -1758,11 +1800,15 @@ export default function Editor() {
             ev?.stopPropagation()
             setIsChangingBrushSizeByMouse(true)
             setChangeBrushSizeByMouseInit({ x, y, brushSize })
+            console.log("alt is pressed")
+
         },
         ev => {
             ev?.preventDefault()
             ev?.stopPropagation()
             setIsChangingBrushSizeByMouse(false)
+            console.log("alt is pressed")
+
         }
     )
 
