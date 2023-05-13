@@ -3,12 +3,12 @@
 import { FolderIcon, PhotoIcon } from '@heroicons/react/24/outline'
 import { PlayIcon, ReloadIcon, } from '@radix-ui/react-icons'
 import { AlignLeft } from 'react-feather'
+import _ from "lodash"
 
 import React, { useCallback, useState } from 'react'
 import { useRecoilState, useRecoilValue } from 'recoil'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
-import { textRecognition } from "../../adapters/inpainting"
-
+import inpaint, { textRecognition, uploadImage } from "../../adapters/inpainting"
 import {
     enableFileManagerState,
     fileState,
@@ -26,7 +26,16 @@ import {
     textRectListState,
     textRectListUndoRedo,
     isTrOkState,
-    isShowState
+    isShowState,
+    trGlobalState,
+    FileName,
+    negativePropmtState,
+    propmtState,
+    seedState,
+    settingState,
+    croperState,
+    imageWidthState,
+    rendersState
 } from '../../store'
 import Button from '../shared/Button'
 import Shortcuts from '../Shortcuts/Shortcuts'
@@ -35,13 +44,21 @@ import SettingIcon from '../Settings/SettingIcon'
 import PromptInput from './PromptInput'
 import CoffeeIcon from '../CoffeeIcon/CoffeeIcon'
 import emitter, { EVENT_CUSTOM_MASK, RERUN_LAST_MASK } from '../../event'
-import { useImage } from '../../utils'
+import { getTextRectCord, loadImage, useImage, dataURItoBlob, blobToImg } from '../../utils'
 import useHotKey from '../../hooks/useHotkey'
-import Toast from '../shared/Toast'
+import { LoadingIcon } from '../shared/Toast'
+
+
+
+
 
 const Header = () => {
-    const isInpainting = useRecoilValue(isInpaintingState)
+    const [isInpainting, setIsInpainting] = useRecoilState(isInpaintingState)
+    const [fileName, setFileName] = useRecoilState(FileName)
     const [file, setFile] = useRecoilState(fileState)
+    // const [original, isOriginalLoaded] = useImage(file)
+    const [renders, setRenders] = useRecoilState(rendersState)
+
     const [mask, setMask] = useRecoilState(maskState)
     const [maskImage, maskImageLoaded] = useImage(mask)
     const [uploadElemId] = useState(`file-upload-${Math.random().toString()}`)
@@ -56,10 +73,20 @@ const Header = () => {
     const [isTring, setIsTring] = useRecoilState(isTringState)
     const [isTrOk, setIsTrOk] = useRecoilState(isTrOkState)
     const [isShow, setIsShow] = useRecoilState(isShowState)
+    const [trGlobal, setTrGlobal] = useRecoilState(trGlobalState)
+    const promptVal = useRecoilValue(propmtState)
+    const negativePromptVal = useRecoilValue(negativePropmtState)
+    const settings = useRecoilValue(settingState)
+    const [seedVal, setSeed] = useRecoilState(seedState)
+    const croperRect = useRecoilValue(croperState)
 
     const [isUnRe, setTextRectUndoRedo] = useRecoilState(textRectListUndoRedo)
 
     const [TextRectLists, setTextRectList] = useRecoilState(textRectList)
+
+    const offsetHeight = parseInt(`${process.env.REACT_APP_OFFSET_HEIGHT}`, 10)
+    const offsetWidth = parseInt(`${process.env.REACT_APP_OFFSET_WIDTH}`, 10)
+
 
 
     const onClickTR = async () => {
@@ -76,20 +103,26 @@ const Header = () => {
                 duration: 10000,
             })
 
-            await textRecognition(file)
+            await textRecognition(fileName, undefined)
                 .then(res => {
                     if (res.ok) {
                         res.json().then((responseObj: TextRectListState) => {
-                            const kh = responseObj.splice_height
+                            const trSpliceHeight = responseObj.tr_splice_height
+                            setTrGlobal({ tr_splice_height: trSpliceHeight })
                             const items = responseObj.text_array
                             if (items) {
-                                console.log(items)
                                 items.forEach((item) => {
-                                    item.left = item.rect[0][0]
-                                    item.top = item.rect[0][1] + kh * item.pn
-                                    item.width = item.rect[1][0] - item.left
-                                    item.height = item.rect[2][1] - item.rect[1][1]
+                                    if (item) {
+                                        getTextRectCord(item, trSpliceHeight)
+                                        item.size = item.lineHeight
+                                        item.height = item.lineHeight
+                                        item.space = 0
+                                        item.color = "black"
+                                        item.family = 'Microsoft YaHei'
+                                        item.info.trans = ""
+                                    }
                                 });
+
                                 setTextRectList(items)
                                 setIsTring(true)
                                 setIsTrOk(true)
@@ -193,15 +226,71 @@ const Header = () => {
                                 name={uploadElemId}
                                 type="file"
                                 onChange={ev => {
-                                    const newFile = ev.currentTarget.files?.[0]
-                                    if (newFile) {
-                                        setFile(newFile)
+                                    const newFiles = ev.currentTarget.files?.[0]
+                                    if (newFiles) {
+                                        // setFile(newFiles)
+                                        setFile(newFiles)
+
+                                        // await uploadImage(newFiles).then((resa) => {
+                                        //     //     console.log("-----------------------------------------")
+                                        //     // setFile(newFiles)
+                                        //     // setIsInpainting(true)
+
+                                        //     setFileName(resa.filename)
+                                        //     // 创建蒙版文件, 提交获取处理过的图片
+                                        //     const hh = URL.createObjectURL(newFiles)
+                                        //     const newimage = new Image()
+                                        //     newimage.src = hh
+                                        //     newimage.onload = async () => {
+                                        //         const tempMask = document.createElement("canvas")
+                                        //         tempMask.width = newimage.width
+                                        //         tempMask.height = newimage.height
+                                        //         setFile(newFiles)
+
+                                        //         await inpaint(
+                                        //             resa.filename,
+                                        //             settings,
+                                        //             croperRect,
+                                        //             promptVal,
+                                        //             negativePromptVal,
+                                        //             seedVal,
+                                        //             tempMask.toDataURL(),
+                                        //             undefined,
+                                        //             undefined
+                                        //         ).then((res) => {
+                                        //             if (!res) {
+                                        //                 console.log("Something went wrong on server side.服务端报错")
+                                        //                 throw new Error('Something went wrong on server side.服务端报错')
+                                        //             }
+                                        //             const { blob, seed } = res
+                                        //             console.log(URL.createObjectURL(blob), "dddddddddddddddddd")
+
+                                        //             if (seed) {
+                                        //                 setSeed(parseInt(seed, 10))
+                                        //             }
+                                        //             // const newRender = new Image()
+                                        //             // await loadImage(newRender, URL.createObjectURL(blob))
+                                        //             newfiledd = new File([blob], resa.filename, {
+                                        //                 type: blob.type,
+                                        //             })
+                                        //             // setFile(newfiledd)
+
+                                        //             // setIsInpainting(false)
+                                        //             console.log("dd--------------------------------")
+                                        //             setFile(newfiledd)
+
+                                        //         })
+                                        //     }
+                                        // })
+
+
                                     }
                                 }}
                                 accept="image/png, image/jpeg"
                             />
                         </Button>
                     </label>
+
 
                     {/* 如果文件已经选定,那么才可以显示识别对话框 */}
                     {file ? (
@@ -230,7 +319,7 @@ const Header = () => {
                                     </svg>
                                 }
                                 onClick={undo}
-                                disabled={!isUnRe.un}
+                                disabled={!(isUnRe.un.length > 0)}
                             />
                             <Button
                                 toolTip="重做"
@@ -250,7 +339,7 @@ const Header = () => {
                                     </svg>
                                 }
                                 onClick={redo}
-                                disabled={!isUnRe.re}
+                                disabled={!(isUnRe.re.length > 0)}
                             />
                         </div>
                     ) : (<></>)

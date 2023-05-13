@@ -3,6 +3,16 @@ import _ from 'lodash'
 import { HDStrategy, LDMSampler } from '../../components/Settings/HDSettingBlock'
 import { ToastState } from '../../components/shared/Toast'
 
+
+export interface Line {
+    size?: number
+    pts: { x: number; y: number }[]
+    lineCap: CanvasLineCap
+}
+
+export type LineGroup = Array<Line>
+
+
 export enum AIModel {
     LAMA = 'lama',
     LDM = 'ldm',
@@ -28,6 +38,13 @@ export const paintByExampleImageState = atom<File | undefined>({
     key: 'paintByExampleImageState',
     default: undefined,
 })
+
+
+export const translate = atom<undefined>({
+    key: 'translate',
+    default: undefined,
+})
+
 
 export interface Rect {
     x: number

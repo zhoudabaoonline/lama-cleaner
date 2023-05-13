@@ -10,6 +10,7 @@ import { keepGUIAlive } from './utils'
 import Header from './components/Header/Header'
 import useHotKey from './hooks/useHotkey'
 import { getServerConfig, isDesktop } from './adapters/inpainting'
+import './media/fonts/korea/font.css'
 
 const SUPPORTED_FILE_TYPE = [
     'image/jpeg',

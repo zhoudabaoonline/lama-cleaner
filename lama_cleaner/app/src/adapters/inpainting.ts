@@ -6,10 +6,105 @@ export const API_ENDPOINT = `${process.env.REACT_APP_INPAINTING_URL}`
 
 export const TEXT_RECOGNITION_API_ENDPOINT = `${process.env.REACT_APP_TEXTRECOGNITION_URL}${process.env.REACT_APP_PRE_PATH}`
 
+export async function uploadImage(
+    imageFile: File
+) {
+    const fd = new FormData()
+    fd.append('image', imageFile)
+    fd.append('filename', imageFile.name)
+
+    try {
+        const res = await fetch(`${API_ENDPOINT}/upload_image`, {
+            method: 'POST',
+            body: fd,
+        })
+        if (res.ok) {
+            return res.json()
+        }
+    }
+    catch (e) {
+        console.log(e)
+    }
+}
+
+// 去文字接口
+export async function textInpaint(
+    fileName: string,
+    left: number,
+    top: number,
+    right: number,
+    bottom: number,
+    id: number,
+) {
+
+    const fd = new FormData()
+    fd.append('fileName', fileName.toString())
+    fd.append('left', left.toString())
+    fd.append('top', top.toString())
+    fd.append('right', right.toString())
+    fd.append('bottom', bottom.toString())
+    fd.append('id', id.toString())
+    fd.append('offset_width', `${process.env.REACT_APP_OFFSETKUANG_WIDTH}`)
+    fd.append('offset_height', `${process.env.REACT_APP_OFFSETKUANG_HEIGHT}`)
+
+    try {
+        // 接口
+        const res = await fetch(`${API_ENDPOINT}/textinpaint`, {
+            method: 'POST',
+            body: fd,
+        })
+        if (res.ok) {
+            const blob = await res.blob()
+            const newSeed = res.headers.get('x-seed')
+            const newSpliceId = res.headers.get('splice-id')
+            // return { blob: URL.createObjectURL(blob), seed: newSeed, spliceId: newSpliceId }
+            return { blob, seed: newSeed, spliceId: newSpliceId }
+        }
+        const errMsg = await res.text()
+        throw new Error(errMsg)
+    } catch (error) {
+        throw new Error(`Something went wrong: ${error}`)
+    }
+}
+
+
+// 区域文字处理,上传文字处理蒙版,上传文字处理区域信息
+// export async function textInpaint(
+//     spliceId: number,
+//     maskFile: File,
+//     pageSize: number
+// ) {
+//     const fd = new FormData()
+
+//     fd.append('mask', maskFile)
+//     fd.append('splice_id', spliceId.toString())
+//     fd.append('page_size', pageSize.toString())
+
+
+//     try {
+//         // 接口
+//         const res = await fetch(`${API_ENDPOINT}/textinpaint`, {
+//             method: 'POST',
+//             body: fd,
+//         })
+//         if (res.ok) {
+//             const blob = await res.blob()
+//             const newSeed = res.headers.get('x-seed')
+//             const newSpliceId = res.headers.get('splice-id')
+//             return { blob: URL.createObjectURL(blob), seed: newSeed, spliceId: newSpliceId }
+//         }
+//         const errMsg = await res.text()
+//         throw new Error(errMsg)
+//     } catch (error) {
+//         throw new Error(`Something went wrong: ${error}`)
+//     }
+// }
+
+
 
 // 图像处理api接口
 export default async function inpaint(
-    imageFile: File,
+    fileName: string,
     settings: Settings,
     croperRect: Rect,
     prompt?: string,
@@ -21,7 +116,7 @@ export default async function inpaint(
 ) {
     // 1080, 2000, Original
     const fd = new FormData()
-    fd.append('image', imageFile)
+    fd.append('fileName', fileName)
     if (maskBase64 !== undefined) {
         fd.append('mask', dataURItoBlob(maskBase64))
     } else if (customMask !== undefined) {
@@ -106,7 +201,8 @@ export default async function inpaint(
         if (res.ok) {
             const blob = await res.blob()
             const newSeed = res.headers.get('x-seed')
-            return { blob: URL.createObjectURL(blob), seed: newSeed }
+            const newSpliceId = res.headers.get('splice-id')
+            return { blob, seed: newSeed, spliceId: newSpliceId }
         }
         const errMsg = await res.text()
         throw new Error(errMsg)
@@ -115,11 +211,29 @@ export default async function inpaint(
     }
 }
 
+
+// 文字识别接口
+// top = form["top"]
+// left = form["left"]
+// right = form["right"]
+// bottom = form["bottom"]
+// cuted = form["cuted"]
+
 export async function textRecognition(
-    imageFile: File
+    fileName: string,
+    cordingObj: { top: number, left: number, right: number, bottom: number } | undefined,
 ) {
     const fd = new FormData()
-    fd.append('image', imageFile)
+    fd.append('fileName', fileName)
+    // 剪切图像
+    if (cordingObj) {
+        fd.append('top', cordingObj.top.toString())
+        fd.append('left', cordingObj.left.toString())
+        fd.append('right', cordingObj.right.toString())
+        fd.append('bottom', cordingObj.bottom.toString())
+        fd.append('cuted', "true")
+    }
+
     try {
         const res = await fetch(`${TEXT_RECOGNITION_API_ENDPOINT}/textrecognition`, {
             method: 'POST',

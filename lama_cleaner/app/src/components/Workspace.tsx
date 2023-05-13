@@ -13,7 +13,8 @@ import {
     settingState,
     showFileManagerState,
     toastState,
-    isShowState
+    isShowState,
+    selectedIndexState
 } from '../store'
 import {
     currentModel,
@@ -28,6 +29,8 @@ import P2PSidePanel from './SidePanel/P2PSidePanel'
 import Plugins from './Plugins/Plugins'
 import Flex from './shared/Layout'
 import ImageSize from './ImageSize/ImageSize'
+import TextEditor from './SidePanel/TextEditor'
+import TextRecognition from './TextRecognition/TextRecognition'
 
 const Workspace = () => {
     const setFile = useSetRecoilState(fileState)
@@ -37,6 +40,7 @@ const Workspace = () => {
     const isSD = useRecoilValue(isSDState)
     const isPaintByExample = useRecoilValue(isPaintByExampleState)
     const isPix2Pix = useRecoilValue(isPix2PixState)
+    const [selectedIndex, setSelectedIndex] = useRecoilState(selectedIndexState)
 
     const [showFileManager, setShowFileManager] =
         useRecoilState(showFileManagerState)
@@ -103,7 +107,13 @@ const Workspace = () => {
     }, [setSettingState])
 
     return (
-        <>
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+        <div
+            onClick={() => {
+                console.log("dddddddddddddd")
+                setSelectedIndex(-1)
+            }}
+        >
             {isSD ? <SidePanel /> : <></>}
             {isPaintByExample ? <PESidePanel /> : <></>}
             {isPix2Pix ? <P2PSidePanel /> : <></>}
@@ -135,6 +145,9 @@ const Workspace = () => {
             <SettingModal onClose={onSettingClose} />
             {/* 快捷键面板 */}
             <ShortcutsModal />
+            {/* 文本编辑区 */}
+            {isShow ? <TextEditor /> : <></>}
+
             <Toast
                 {...toastVal}
                 onOpenChange={(open: boolean) => {
@@ -143,7 +156,7 @@ const Workspace = () => {
                     })
                 }}
             />
-        </>
+        </div>
     )
 }
 

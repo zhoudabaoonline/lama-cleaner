@@ -1,3 +1,4 @@
+/* eslint-disable no-param-reassign */
 import React, {
     SyntheticEvent,
     useCallback,
@@ -11,14 +12,15 @@ import {
     ArrowsPointingOutIcon,
     ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
+import _ from "lodash"
 import {
     ReactZoomPanPinchRef,
     TransformComponent,
     TransformWrapper,
 } from 'react-zoom-pan-pinch'
-import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil'
+import { useRecoilCallback, useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil'
 import { useWindowSize, useKey, useKeyPressEvent } from 'react-use'
-import inpaint, { downloadToOutput, runPlugin } from '../../adapters/inpainting'
+import inpaint, { downloadToOutput, runPlugin, textInpaint, textRecognition } from '../../adapters/inpainting'
 import Button from '../shared/Button'
 import Slider from './Slider'
 import {
@@ -30,6 +32,14 @@ import {
     loadImage,
     srcToFile,
     useImage,
+    cutImageFile,
+    dataURItoBlob,
+    cutCanvas,
+    canvasToImage,
+    getTextToLine,
+    blobToImg,
+    cutImageSizeFile, mouseXY,
+    cutImageSize,
 } from '../../utils'
 import {
     appState,
@@ -37,6 +47,7 @@ import {
     croperState,
     enableFileManagerState,
     fileState,
+    FileName,
     imageHeightState,
     imageWidthState,
     interactiveSegClicksState,
@@ -58,7 +69,17 @@ import {
     TextRectListState,
     isTrOkState,
     drawClick,
-    isShowState
+    textRectListUndoRedo,
+    selectedIndexState, trGlobalState,
+    drawTextClick,
+    isShowState,
+    TextRect,
+    LineGroup,
+    Line,
+    rePcsTextRectClick,
+    canvasOffsetState,
+    globalContext, isPanningState, rendersState,
+    isGetingColorState
 } from '../../store'
 import useHotKey from '../../hooks/useHotkey'
 import Croper from '../Croper/Croper'
@@ -67,6 +88,8 @@ import emitter, {
     EVENT_CUSTOM_MASK,
     EVENT_PAINT_BY_EXAMPLE,
     RERUN_LAST_MASK,
+    REVOCAT_INPAITINE,
+    RevocatInpaitine,
 } from '../../event'
 import FileSelect from '../FileSelect/FileSelect'
 import InteractiveSeg from '../InteractiveSeg/InteractiveSeg'
@@ -75,7 +98,6 @@ import InteractiveSegReplaceModal from '../InteractiveSeg/ReplaceModal'
 import TextRecognition from '../TextRecognition/TextRecognition'
 import { PluginName } from '../Plugins/Plugins'
 import MakeGIF from './MakeGIF'
-import TextEditor from '../SidePanel/TextEditor'
 
 
 const TOOLBAR_SIZE = 200
@@ -83,14 +105,8 @@ const MIN_BRUSH_SIZE = 10
 const MAX_BRUSH_SIZE = 200
 const BRUSH_COLOR = '#ffcc00bb'
 
-interface Line {
-    size?: number
-    pts: { x: number; y: number }[]
-    lineCap: CanvasLineCap
-}
-
-type LineGroup = Array<Line>
-
+export const OFFSET_WIDTH = `${process.env.REACT_APP_OFFSET_WIDTH}`
+export const OFFSET_HEIGHT = `${process.env.REACT_APP_OFFSET_HEIGHT}`
 
 // 绘制线条
 function drawLines(
@@ -114,20 +130,18 @@ function drawLines(
     })
 }
 
-function mouseXY(ev: SyntheticEvent) {
-    const mouseEvent = ev.nativeEvent as MouseEvent
-    return { x: mouseEvent.offsetX, y: mouseEvent.offsetY }
-}
+
 
 export default function Editor() {
     const [file, setFile] = useRecoilState(fileState)
+    const [fileName, setFileName] = useRecoilState(FileName)
+
     const promptVal = useRecoilValue(propmtState)
     const negativePromptVal = useRecoilValue(negativePropmtState)
     const settings = useRecoilValue(settingState)
     const [seedVal, setSeed] = useRecoilState(seedState)
     const croperRect = useRecoilValue(croperState)
     const setToastState = useSetRecoilState(toastState)
-    const isTring = useRecoilValue(isTringState)
 
     const [isInpainting, setIsInpainting] = useRecoilState(isInpaintingState)
     const setIsPluginRunning = useSetRecoilState(isPluginRunningState)
@@ -149,16 +163,22 @@ export default function Editor() {
     const [brushSize, setBrushSize] = useRecoilState(brushSizeState)
 
     const [original, isOriginalLoaded] = useImage(file)
-    const [renders, setRenders] = useState<HTMLImageElement[]>([])
-    const [context, setContext] = useState<CanvasRenderingContext2D>()
+    const [renders, setRenders] = useRecoilState(rendersState)
+
+    const [context, setContext] = useRecoilState<CanvasRenderingContext2D | null>(globalContext)
+
     const [maskCanvas] = useState<HTMLCanvasElement>(() => { return document.createElement('canvas') })
+    const [textCanvas] = useState<HTMLCanvasElement>(() => { return document.createElement('canvas') })
+
     const [lineGroups, setLineGroups] = useState<LineGroup[]>([])
     const [lastLineGroup, setLastLineGroup] = useState<LineGroup>([])
     const [curLineGroup, setCurLineGroup] = useState<LineGroup>([])
     const [{ x, y }, setCoords] = useState({ x: -1, y: -1 })
     const [showBrush, setShowBrush] = useState(false)
     const [showRefBrush, setShowRefBrush] = useState(false)
-    const [isPanning, setIsPanning] = useState<boolean>(false)
+    const [isPanning, setIsPanning] = useRecoilState<boolean>(isPanningState)
+    const [isGetingColor, setIsGetingColor] = useRecoilState<boolean>(isGetingColorState)
+
     const [isChangingBrushSizeByMouse, setIsChangingBrushSizeByMouse] = useState<boolean>(false)
     const [changeBrushSizeByMouseInit, setChangeBrushSizeByMouseInit] = useState({
         x: -1,
@@ -190,46 +210,315 @@ export default function Editor() {
     const [imageWidth, setImageWidth] = useRecoilState(imageWidthState)
     const [imageHeight, setImageHeight] = useRecoilState(imageHeightState)
     const app = useRecoilValue(appState)
+    const [selectedIndex, setSelectedIndex] = useRecoilState(selectedIndexState)
 
     // 文字识别组件相关
     const textRectLists = useRecoilValue(textRectListState)
     const [isDrawing, setIsDrawing] = useRecoilState(isDrawingState)
     const [isTrOk, setIsTrOk] = useRecoilState(isTrOkState)
     const [isDrawClick, setDrawClick] = useRecoilState(drawClick)
-
     const [isShow, setIsShow] = useRecoilState(isShowState)
+    const [trGlobal, setTrGlobal] = useRecoilState(trGlobalState)
+    const [isDrawTextClick, setDrawTextClick] = useRecoilState(drawTextClick)
+    const [isPcsTextRectClick, setPcsTextRectClick] = useRecoilState(rePcsTextRectClick)
+    const [canvasOffset, setCanvasOffset] = useRecoilState(canvasOffsetState)
 
-    // 转换文字识别区域信息成为线段信息
-    // 使用闭包吧方法传递过去方便其他的组件做事件调用
-    function textRectToLines() {
-        let brushSizes = 0
-        let lineGroup: LineGroup = []
-        if (isMultiStrokeKeyPressed || runMannually) {
-            lineGroup = [...curLineGroup]
+    const undoRedoIndex = useRecoilValue(textRectListUndoRedo)
+
+    const [TextRectLists, setTextRectList] = useRecoilState(textRectList)
+    const [isTring, setIsTring] = useRecoilState(isTringState)
+
+    const offsetHeight = parseInt(`${process.env.REACT_APP_OFFSET_HEIGHT}`, 10)
+    const offsetWidth = parseInt(`${process.env.REACT_APP_OFFSET_WIDTH}`, 10)
+
+
+
+    // 区域文字识别回退
+    function PcsTextRectClick() {
+        return async (rePcsIndex: number) => {
+
+            // 当前页面
+            const { pn } = textRectLists.text_array[rePcsIndex]
+            const offset = pn * trGlobal.tr_splice_height
+
+            // 收集页面上文字识别的区域
+            const collectedPnTextRect: TextRect[] = []
+            textRectLists.text_array.forEach(item => {
+                if (item.pn === pn) {
+                    collectedPnTextRect.push(item)
+                }
+            });
+
+            // 转换识别区域成线段
+            const tempLineGroup: LineGroup = []
+            collectedPnTextRect.forEach((element) => {
+                tempLineGroup.push(getTextToLine(element, offset))
+            });
+
+            // 再临时蒙版上绘制线段
+            maskCanvas.width = imageWidth
+            maskCanvas.height = trGlobal.tr_splice_height
+
+            const tempCtx = maskCanvas.getContext("2d")
+            if (tempCtx) {
+                drawLines(tempCtx, tempLineGroup)
+            }
+            // 转换成文件
+            const blob = dataURItoBlob(maskCanvas.toDataURL())
+            const turl = URL.createObjectURL(blob)
+            const maskFile = new File([blob], "temp.png", {
+                type: "image/png",
+            })
         }
+    }
 
-        textRectLists.text_array.forEach(element => {
-            const temp: { x: number, y: number }[] = []
-            brushSizes = element.height / 2
-            // 横坐标要减去半径
-            temp.push({ x: element.left + brushSizes, y: element.top + brushSizes })
-            temp.push({ x: element.left - brushSizes + element.width, y: element.top + brushSizes })
+    useEffect(() => {
+        setPcsTextRectClick(PcsTextRectClick)
+    }, [maskCanvas, textRectLists, textRectLists.text_array, trGlobal.tr_splice_height])
 
-            // 创建一组新的数据
-            lineGroup.push({ size: brushSizes * 2, pts: temp, lineCap: 'square' })
 
-        });
-        // 保存当前绘制的线段
-        setCurLineGroup(lineGroup)
-        // 绘制蒙版到当前render上
-        drawOnCurrentRender(lineGroup)
+    // 重新识别并绘制
+    const revocatInpaitine = useCallback(
+        async (index: number) => {
+            const left = textRectLists.text_array[index].rectLeft
+            const top = textRectLists.text_array[index].rectTop
+            const width = textRectLists.text_array[index].rectWidth
+            const height = textRectLists.text_array[index].rectHeight
 
+            // 从原始图片上截取信息
+            console.log(original, "dddd")
+            console.log(renders.length, "长度")
+            const cutFile = cutImageSize(renders[0], imageWidth, imageHeight, left, top, width, height)
+            const ctx = context
+            const promiseImage = await blobToImg(cutFile.file)
+            ctx?.drawImage(promiseImage, left, top)
+
+            // 识别文字
+            const responsePromise = await textRecognition(fileName, { left, top, right: left + width, bottom: top + height })
+            if (responsePromise.ok) {
+                // 识别并显示
+                responsePromise.json().then((responseObj: TextRectListState) => {
+                    // 返回的新数据
+                    const trSpliceHeight = responseObj.tr_splice_height
+                    setTrGlobal({ tr_splice_height: trSpliceHeight })
+                    const items = responseObj.text_array
+                    if (items) {
+                        items.forEach((item) => {
+                            if (item) {
+                                const [[x0, y0], [x1,], [, y2],] = [...item.rect]
+                                item.lineTop = y0 + top
+                                item.lineLeft = x0 + left
+                                item.lineHeight = y2 - y0
+                                item.lineWidth = x1 - x0
+
+                                item.rectTop = item.lineTop - offsetHeight
+                                item.rectLeft = item.lineLeft - offsetWidth
+                                item.rectHeight = item.lineHeight + 2 * offsetHeight
+                                item.rectWidth = item.lineWidth + 2 * offsetWidth
+
+                                item.size = item.lineHeight
+                                item.space = 0
+                                item.color = "black"
+                                item.height = item.lineHeight
+                                item.family = 'Microsoft YaHei'
+                                item.info.trans = ''
+                                item.info.transed = false
+                            }
+                        });
+                        // 删除原来的框
+                        const templist = _.cloneDeep(TextRectLists)
+                        templist.text_array.splice(index, 1)
+                        templist.text_array = templist.text_array.concat(items)
+                        setTextRectList(templist.text_array)
+                        setSelectedIndex(templist.text_array.length - 1)
+                        setIsTring(true)
+                        setIsTrOk(true)
+                    }
+
+                })
+            }
+            // textInpaint(left,top,width+left,top+height,)
+
+
+
+        },
+        [textRectLists, context]
+    )
+
+    useEffect(() => {
+        emitter.on(REVOCAT_INPAITINE, (index: any) => {
+            revocatInpaitine(index)
+        })
+        return () => {
+            emitter.off(REVOCAT_INPAITINE)
+        }
+    }, [revocatInpaitine])
+
+
+
+
+    // 一键去字
+    // 转换文字识别区域信息成为蒙版线段信息
+    // 使用闭包吧方法传递过去方便其他的组件做事件调用
+    // pn 为页面数据,如果指定了,那么绘制指定数据
+    function textRectToLines() {
+        return async () => {
+            // 绘制一个线组的蒙版
+            // 先搞定背景
+            const ctx = context
+            if (!ctx) {
+                throw new Error('canvas has invalid size')
+            }
+            await Promise.all(
+                textRectLists.text_array.map(async (element) => {
+                    // 提交坐标数据开始去字
+                    // 使用新的计算方式
+                    const { rectLeft, rectTop, rectWidth, rectHeight, id } = element
+                    let res: any = {}
+                    try {
+                        res = await textInpaint(fileName, rectLeft, rectTop, rectLeft + rectWidth, rectTop + rectHeight, id)
+                    }
+                    catch (e) {
+                        console.log(e)
+                    }
+                    const promiseImage = await blobToImg(res.blob)
+                    ctx.drawImage(promiseImage, rectLeft, rectTop)
+                })
+            )
+
+            const dl = ctx.canvas.toDataURL()
+            const blobn = dataURItoBlob(dl)
+            const image = await blobToImg(blobn)
+            // 保存图像,新增了一个render,
+            const newRenders = [...renders, image]
+            setRenders(newRenders)
+        }
     }
 
     // 使用闭包传递控制函数,,这里一定要把textRectlists加上,否则上面的闭包可能获取不到相关函数
-    // useEffect(() => {
-    //     setDrawClick(textRectToLines)
-    // }, [textRectLists, curLineGroup, setCurLineGroup, isMultiStrokeKeyPressed, runMannually])
+    useEffect(() => {
+        setDrawClick(textRectToLines)
+    }, [textRectLists, curLineGroup, setCurLineGroup, isMultiStrokeKeyPressed, runMannually, renders])
+
+
+    // text 绘制的文本
+    // xl 横坐标
+    // yl 纵坐标
+    // width  宽度
+    // font 文本样式,字体大小,使用字体,
+    // 行高
+    // ctx  绘制对象 
+    function drawTextKakaxi(
+        text: string,
+        xl: number,
+        yl: number,
+        width: number,
+        rowHeight: number,
+        ctx: CanvasRenderingContext2D) {
+        // 1 将字符串转换成数组
+        const test = text.split("")
+        let temp = ""
+        const row = []
+        // 1.2 计算文字宽度，若文字宽度大于设定的宽度，则push到数组下一个元素，否则将字符串++
+        // eslint-disable-next-line no-restricted-syntax
+        for (const element of test) {
+            console.log(ctx.measureText(temp), "measure result")
+            if (ctx.measureText(temp).width > width) {
+                row.push(temp)
+                temp = ""
+            }
+            temp += element
+        }
+        // 1.3 循环结束将temp最后一段字符push
+        row.push(temp)
+        // 1.4 遍历数组,输出文字
+        for (let j = 0; j < row.length; j += 1) {
+            console.log(row[j], xl, yl + (j + 1) * rowHeight)
+            ctx.fillText(row[j], xl, yl + (j + 1) * rowHeight)
+        }
+    }
+
+    // 自定义绘制函数,区分文字中的换行
+    function drawTextKakaxi2(
+        text: string,
+        xl: number,
+        yl: number,
+        fontSize: number, // 单个字符宽度
+        spaceWidth: number, // 字符间隔
+        rowHeight: number,
+        ctx: CanvasRenderingContext2D
+    ) {
+        const list = []
+        const chartList = text.split("")
+        let w = 0
+        let h = 1
+        // eslint-disable-next-line no-restricted-syntax
+        for (const chat of chartList) {
+            if (chat === '\n') {
+                w = 0
+                h += 1
+            } else {
+                ctx.fillText(chat, xl + w * (fontSize + spaceWidth), yl + h * rowHeight)
+                w += 1
+            }
+        }
+    }
+
+    // 绘制文字到图片
+    function drawText() {
+        return async () => {
+            const rate = 1
+
+            maskCanvas.width = imageWidth
+            maskCanvas.height = imageHeight
+            const textContext = maskCanvas.getContext("2d")
+
+            if (textContext) {
+                textContext.setTransform(rate, 0, 0, rate, 0, 0);
+                if (renders.length > 0) {
+                    textContext.drawImage(renders[renders.length - 1], 0, 0, imageWidth * rate, imageHeight * rate)
+                } else {
+                    textContext.drawImage(original, 0, 0, imageWidth * rate, imageHeight * rate)
+                }
+
+                textRectLists.text_array.forEach((nodeInfo) => {
+                    textContext.font = `${nodeInfo.size}px ${nodeInfo.family}`
+                    textContext.fillStyle = `${nodeInfo.color ? nodeInfo.color : 'black'}`
+                    if (trGlobal.showTrans) {
+                        drawTextKakaxi2(nodeInfo.info.trans, nodeInfo.lineLeft, nodeInfo.lineTop, nodeInfo.size, nodeInfo.space, nodeInfo.height, textContext)
+                    } else {
+                        drawTextKakaxi2(nodeInfo.info.text, nodeInfo.lineLeft, nodeInfo.lineTop, nodeInfo.size, nodeInfo.space, nodeInfo.height, textContext)
+                    }
+                })
+
+                const nowRender = renders[renders.length - 1]
+                const dl = maskCanvas.toDataURL()
+                const blobn = dataURItoBlob(dl)
+                console.log(URL.createObjectURL(blobn))
+
+                // downloadImage(nowRender.currentSrc, "ceshi.png")
+
+                const aDownloadLink = document.createElement('a')
+                // Add the name of the file to the link
+                aDownloadLink.download = "sdfssdf.png"
+                // Attach the data to the link
+                aDownloadLink.href = maskCanvas.toDataURL('image/png')
+                console.log(aDownloadLink.href)
+                // Get the code to click the download link
+                aDownloadLink.click()
+
+
+            } else {
+                console.log(" context is null ")
+            }
+        }
+
+    }
+
+    useEffect(() => {
+        setDrawTextClick(drawText)
+    }, [textRectLists, imageWidth, imageHeight, maskCanvas, renders])
+
 
     // 在画布上绘图
     const draw = useCallback(
@@ -243,6 +532,7 @@ export default function Editor() {
 
             context.clearRect(0, 0, context.canvas.width, context.canvas.height)
             context.drawImage(render, 0, 0, imageWidth, imageHeight)
+
             // 这里应该是绘制交互片段的底片的
             if (isInteractiveSeg && tmpInteractiveSegMask !== null) {
                 context.drawImage(tmpInteractiveSegMask, 0, 0, imageWidth, imageHeight)
@@ -252,7 +542,7 @@ export default function Editor() {
                 context.drawImage(interactiveSegMask, 0, 0, imageWidth, imageHeight)
             }
             // 绘制线段
-            console.log(lineCap, "lineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCaplineCap")
+
             drawLines(context, lineGroup, undefined)
         },
         [
@@ -276,6 +566,7 @@ export default function Editor() {
             maskCanvas.width = context?.canvas.width
             maskCanvas.height = context?.canvas.height
             const ctx = maskCanvas.getContext('2d')
+            // 这里重新创建的ctx,就相当于清空了
             if (!ctx) {
                 throw new Error('could not retrieve mask canvas')
             }
@@ -314,6 +605,10 @@ export default function Editor() {
                     'white'
                 )
             }
+            const dl = maskCanvas.toDataURL()
+            const blob = dataURItoBlob(dl)
+
+            console.log(URL.createObjectURL(blob))
         },
         [context, maskCanvas, isPix2Pix, imageWidth, imageHeight]
     )
@@ -329,14 +624,18 @@ export default function Editor() {
         (lineGroup: LineGroup) => {
             if (renders.length === 0) {
                 // render还没有的时候绘制初始
+                console.log("orignal")
                 draw(original, lineGroup)
             } else {
+                console.log("renders")
                 // 在最新的render上绘制线段图
                 draw(renders[renders.length - 1], lineGroup)
             }
         },
         [original, renders, draw]
     )
+
+
 
     // 运行图像处理
     const runInpainting = useCallback(
@@ -346,6 +645,7 @@ export default function Editor() {
             maskImage?: HTMLImageElement | null,
             paintByExampleImage?: File
         ) => {
+
             // customMask: mask uploaded by user
             // maskImage: mask from interactive segmentation
             if (file === undefined) {
@@ -356,7 +656,6 @@ export default function Editor() {
             // useLastLineGroup 的影响
             // 1. 使用上一次的 mask
             // 2. 结果替换当前 render
-            console.log('runInpainting 运行图像处理')
             console.log({
                 useCustomMask,
                 useMaskImage,
@@ -382,6 +681,7 @@ export default function Editor() {
             setCurLineGroup([])
             setIsDraging(false)
             setIsInpainting(true)
+            // 这里会创建新的maskcanvas,,蒙版数据,maskcanvas再里面
             if (settings.graduallyInpainting) {
                 drawLinesOnMask([maskLineGroup], maskImage)
             } else {
@@ -390,6 +690,7 @@ export default function Editor() {
 
             let targetFile = file
             if (settings.graduallyInpainting === true) {
+
                 if (useLastLineGroup === true) {
                     // renders.length == 1 还是用原来的
                     if (renders.length > 1) {
@@ -401,8 +702,6 @@ export default function Editor() {
                         )
                     }
                 } else if (renders.length > 0) {
-                    console.info('gradually inpainting on last result')
-
                     const lastRender = renders[renders.length - 1]
                     targetFile = await srcToFile(
                         lastRender.currentSrc,
@@ -414,8 +713,9 @@ export default function Editor() {
 
             try {
                 // 提交到服务器处理
+                // eslint-disable-next-line no-await-in-loop
                 const res = await inpaint(
-                    targetFile,
+                    fileName,
                     settings,
                     croperRect,
                     promptVal,
@@ -429,15 +729,18 @@ export default function Editor() {
                     throw new Error('Something went wrong on server side.服务端报错')
                 }
                 const { blob, seed } = res
+
                 if (seed) {
                     setSeed(parseInt(seed, 10))
                 }
                 const newRender = new Image()
-                await loadImage(newRender, blob)
+                // eslint-disable-next-line no-await-in-loop
+                await loadImage(newRender, URL.createObjectURL(blob))
 
                 if (useLastLineGroup === true) {
+                    // 相当于拷贝了之前的render
                     const prevRenders = renders.slice(0, -1)
-                    // 保存图像
+                    // 保存图像,新增了一个render,
                     const newRenders = [...prevRenders, newRender]
                     setRenders(newRenders)
                 } else {
@@ -447,6 +750,7 @@ export default function Editor() {
                 }
 
                 draw(newRender, [])
+
                 // Only append new LineGroup after inpainting success
                 setLineGroups(newLineGroups)
 
@@ -468,20 +772,7 @@ export default function Editor() {
             setTmpInteractiveSegMask(null)
             setInteractiveSegMask(null)
         },
-        [
-            lineGroups,
-            curLineGroup,
-            maskCanvas,
-            settings.graduallyInpainting,
-            settings,
-            croperRect,
-            promptVal,
-            negativePromptVal,
-            drawOnCurrentRender,
-            hadDrawSomething,
-            drawLinesOnMask,
-            seedVal,
-        ]
+        [file, lineGroups, setIsInpainting, settings, lastLineGroup, hadDrawSomething, curLineGroup, drawLinesOnMask, renders, fileName, croperRect, promptVal, negativePromptVal, seedVal, maskCanvas, draw, setSeed, setRenders, setToastState, drawOnCurrentRender]
     )
 
     useEffect(() => {
@@ -509,13 +800,7 @@ export default function Editor() {
         return () => {
             emitter.off(EVENT_PROMPT)
         }
-    }, [
-        hadDrawSomething,
-        runInpainting,
-        promptVal,
-        interactiveSegMask,
-        prevInteractiveSegMask,
-    ])
+    }, [hadDrawSomething, runInpainting, promptVal, interactiveSegMask, prevInteractiveSegMask, lastLineGroup.length, isPix2Pix, setToastState])
 
     useEffect(() => {
         emitter.on(EVENT_CUSTOM_MASK, (data: any) => {
@@ -651,19 +936,7 @@ export default function Editor() {
                 setIsPluginRunning(false)
             }
         },
-        [
-            renders,
-            setRenders,
-            getCurrentRender,
-            setIsPluginRunning,
-            isProcessing,
-            setImageHeight,
-            setImageWidth,
-            lineGroups,
-            viewportRef,
-            windowSize,
-            setLineGroups,
-        ]
+        [isProcessing, setIsPluginRunning, getCurrentRender, setImageHeight, setImageWidth, renders, setRenders, lineGroups, setToastState, windowSize.width, windowSize.height]
     )
 
     useEffect(() => {
@@ -801,16 +1074,7 @@ export default function Editor() {
             console.log('[on file load] centerView')
             setInitialCentered(true)
         }
-    }, [
-        context?.canvas,
-        viewportRef,
-        original,
-        isOriginalLoaded,
-        windowSize,
-        initialCentered,
-        drawOnCurrentRender,
-        getCurrentWidthHeight,
-    ])
+    }, [context?.canvas, viewportRef, original, isOriginalLoaded, windowSize, initialCentered, drawOnCurrentRender, getCurrentWidthHeight, setImageWidth, setImageHeight])
 
     useEffect(() => {
         console.log('[useEffect] centerView')
@@ -834,14 +1098,7 @@ export default function Editor() {
 
         setScale(minScale)
         setPanned(false)
-    }, [
-        viewportRef,
-        windowSize,
-        imageHeight,
-        imageWidth,
-        windowSize.height,
-        minScale,
-    ])
+    }, [viewportRef, windowSize, imageHeight, imageWidth, minScale])
 
     const resetRedoState = () => {
         setRedoCurLines([])
@@ -921,7 +1178,16 @@ export default function Editor() {
 
     // 鼠标移动的时候
     const onMouseDrag = (ev: SyntheticEvent) => {
-        if (isTring) {
+
+        // 获取鼠标坐标
+        if (isGetingColor) {
+            const nowPoint = mouseXY(ev)
+            console.log(nowPoint)
+            return
+        }
+
+
+        if (isShow) {
             return
         }
         if (isChangingBrushSizeByMouse) {
@@ -945,12 +1211,12 @@ export default function Editor() {
         if (curLineGroup.length === 0) {
             return
         }
-        // 鼠标按下,并且拖动的时候开始保存线段数据
-        console.log(curLineGroup, "curlinegroupcurlinegroupcurlinegroupcurlinegroupcurlinegroup")
+        // 鼠标按下,并且拖动的时候开始保存线段数据,复制线组
         const lineGroup = [...curLineGroup]
         // 在最新一组当中插入数据
         lineGroup[lineGroup.length - 1].pts.push(mouseXY(ev))
         setCurLineGroup(lineGroup)
+        // 边拖动鼠标就边绘制了蒙版
         drawOnCurrentRender(lineGroup)
     }
 
@@ -1055,6 +1321,9 @@ export default function Editor() {
 
     // 在绘制曲线的时候,鼠标左键放开,
     const onCanvasMouseUp = (ev: SyntheticEvent) => {
+        if (isShow) {
+            return
+        }
         if (isInteractiveSeg) {
             const xy = mouseXY(ev)
             const newClicks: number[][] = [...clicks]
@@ -1070,7 +1339,7 @@ export default function Editor() {
 
     // 鼠标按下就开始捕获数据,
     const onMouseDown = (ev: SyntheticEvent) => {
-        if (isTring) {
+        if (isShow) {
             return
         }
         if (isProcessing) {
@@ -1147,7 +1416,7 @@ export default function Editor() {
         // save line Group
         const latestLineGroup = lineGroups.pop()!
         setRedoLineGroups([...redoLineGroups, latestLineGroup])
-        // If render is undo, clear strokes
+        // 清空重做线组
         setRedoCurLines([])
 
         setLineGroups([...lineGroups])
@@ -1166,20 +1435,14 @@ export default function Editor() {
         // } else {
         //   draw(newRenders[newRenders.length - 1], [])
         // }
-    }, [
-        draw,
-        renders,
-        redoRenders,
-        redoLineGroups,
-        lineGroups,
-        original,
-        context,
-    ])
+    }, [renders, lineGroups, redoLineGroups, redoRenders, setRenders])
 
     const undo = () => {
         if (runMannually && curLineGroup.length !== 0) {
+            // 当前线条组有的情况,撤销描边数据
             undoStroke()
         } else {
+            // 没有的额清空,撤销渲染蒙版数据
             undoRender()
         }
     }
@@ -1308,11 +1571,14 @@ export default function Editor() {
         return false
     }
 
+    // 切换
     useKeyPressEvent(
         'Tab',
         ev => {
             ev?.preventDefault()
             ev?.stopPropagation()
+            setIsShow(false)
+            setIsGetingColor(true)
             if (hadRunInpainting()) {
                 setShowOriginal(() => {
                     window.setTimeout(() => {
@@ -1325,6 +1591,10 @@ export default function Editor() {
         ev => {
             ev?.preventDefault()
             ev?.stopPropagation()
+            if (isTrOk) {
+                setIsShow(true)
+                setIsGetingColor(false)
+            }
             if (hadRunInpainting()) {
                 setSliderPos(0)
                 window.setTimeout(() => {
@@ -1340,10 +1610,10 @@ export default function Editor() {
         }
         if ((enableFileManager || isEnableAutoSaving) && renders.length > 0) {
             try {
-                downloadToOutput(renders[renders.length - 1], file.name, file.type)
+                downloadToOutput(renders[renders.length - 1], fileName, file.type)
                 setToastState({
                     open: true,
-                    desc: `Save image success`,
+                    desc: `保存图像成功`,
                     state: 'success',
                     duration: 2000,
                 })
@@ -1362,6 +1632,8 @@ export default function Editor() {
         const name = file.name.replace(/(\.[\w\d_-]+)$/i, '_cleanup$1')
         const curRender = renders[renders.length - 1]
         downloadImage(curRender.currentSrc, name)
+
+        // 下载蒙版
         if (settings.downloadMask) {
             let maskFileName = file.name.replace(/(\.[\w\d_-]+)$/i, '_mask$1')
             maskFileName = maskFileName.replace(/\.[^/.]+$/, '.jpg')
@@ -1387,21 +1659,24 @@ export default function Editor() {
 
     // 鼠标在编辑区的样式
     const getCursor = useCallback(() => {
+
         if (isPanning) {
-            console.log("grab")
+            // console.log("grab")
             return 'grab'
         }
-        if (isTring) {
-            console.log("cursor")
+        if (isShow) {
+            // console.log("cursor")
             return 'cursor'
+        }
+        if (isGetingColor) {
+            return 'help'
         }
         if (showBrush) {
             console.log("none")
             return 'none'
         }
-
         return undefined
-    }, [showBrush, isPanning, isTring])
+    }, [showBrush, isPanning, isShow, isGetingColor])
 
     // Standard Hotkeys for Brush Size
     useHotKey('[', () => {
@@ -1443,7 +1718,7 @@ export default function Editor() {
                     await copyCanvasImage(context?.canvas)
                     setToastState({
                         open: true,
-                        desc: 'Copy inpainting result to clipboard',
+                        desc: '已复制处理结果到剪切板',
                         state: 'success',
                         duration: 3000,
                     })
@@ -1455,6 +1730,7 @@ export default function Editor() {
     )
 
     // Toggle clean/zoom tool on spacebar.
+    // 按住不放的事件,
     useKeyPressEvent(
         ' ',
         ev => {
@@ -1559,7 +1835,7 @@ export default function Editor() {
                 wheel={{ step: 0.05 }}
                 centerZoomedOut
                 alignmentAnimation={{ disabled: true }}
-                // centerOnInit
+                centerOnInit
                 limitToBounds={false}
                 doubleClick={{ disabled: true }}
                 initialScale={minScale}
@@ -1569,21 +1845,34 @@ export default function Editor() {
                         setPanned(true)
                     }
                 }}
+                onInit={(ref) => {
+                    setTimeout(() => {
+                        setCanvasOffset({ ...ref.state })
+                    }, 100);
+                }}
+                onPanningStop={(ref) => {
+                    setCanvasOffset({ ...ref.state })
+                }}
+                onZoomStop={(ref) => {
+                    setCanvasOffset({ ...ref.state })
+                }}
                 onZoom={ref => {
                     setScale(ref.state.scale)
                 }}
             >
+
                 <TransformComponent
                     contentClass={isProcessing ? 'editor-canvas-loading' : ''}
                     contentStyle={{
                         visibility: initialCentered ? 'visible' : 'hidden',
                     }}
                 >
+                    {/* 用来展示识别出来的文字 */}
+                    {isShow ?
+                        (<TextRecognition />)
+                        : <></>}
 
                     <div className="editor-canvas-container">
-                        {/* 用来展示识别出来的文字 */}
-                        {isTring ? <TextRecognition /> : <></>}
-
                         <canvas
                             className="editor-canvas"
                             style={{
@@ -1675,23 +1964,25 @@ export default function Editor() {
             onMouseMove={onMouseMove}
             onMouseUp={onPointerUp}
         >
+            <div className='showImage' />
             <MakeGIF renders={renders} />
             <InteractiveSegConfirmActions
                 onAcceptClick={onInteractiveAccept}
                 onCancelClick={onInteractiveCancel}
             />
+            {/* file是否存在来判断是否加载rendercanvas */}
             {file === undefined ? renderFileSelect() : renderCanvas()}
 
             {/* 这里显示的笔刷组件  brush */}
             {showBrush &&
-                !isTring &&
+                !isShow &&
                 !isInpainting &&
                 !isPanning &&
                 // eslint-disable-next-line no-nested-ternary
                 (isInteractiveSeg ? (
                     renderInteractiveSegCursor()
                 ) :
-                    !isTring ?
+                    !isShow ?
                         <div
                             className="brush-shape"
                             style={getBrushStyle(
@@ -1821,8 +2112,6 @@ export default function Editor() {
                     )}
                 </div>
             </div>
-
-            {isShow ? <TextEditor onClick={textRectToLines} /> : <></>}
 
             <InteractiveSegReplaceModal
                 show={showInteractiveSegModal}
